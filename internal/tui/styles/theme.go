@@ -44,6 +44,7 @@ type Styles struct {
 	Text     lipgloss.Style
 	Muted    lipgloss.Style
 	Subtle   lipgloss.Style
+	Primary  lipgloss.Style
 
 	Success lipgloss.Style
 	Error   lipgloss.Style
@@ -75,9 +76,10 @@ func (t *Theme) buildStyles() *Styles {
 			Foreground(t.Secondary).
 			Bold(true),
 
-		Text:   base,
-		Muted:  base.Foreground(t.FgMuted),
-		Subtle: base.Foreground(t.FgSubtle),
+		Text:    base,
+		Muted:   base.Foreground(t.FgMuted),
+		Subtle:  base.Foreground(t.FgSubtle),
+		Primary: base.Foreground(t.Primary),
 
 		Success: base.Foreground(t.Success),
 		Error:   base.Foreground(t.Error),

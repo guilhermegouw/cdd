@@ -8,9 +8,11 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
 
+	"github.com/guilhermegouw/cdd/internal/agent"
 	"github.com/guilhermegouw/cdd/internal/tui/components/welcome"
 	"github.com/guilhermegouw/cdd/internal/tui/components/wizard"
 	"github.com/guilhermegouw/cdd/internal/tui/page"
+	"github.com/guilhermegouw/cdd/internal/tui/page/chat"
 	"github.com/guilhermegouw/cdd/internal/tui/styles"
 	"github.com/guilhermegouw/cdd/internal/tui/util"
 )
@@ -19,6 +21,9 @@ import (
 type Model struct {
 	welcome     *welcome.Welcome
 	wizard      *wizard.Wizard
+	chatPage    *chat.Model
+	agent       *agent.DefaultAgent
+	program     *tea.Program
 	currentPage page.ID
 	statusMsg   string
 	keyMap      KeyMap
@@ -30,26 +35,33 @@ type Model struct {
 }
 
 // New creates a new TUI model.
-func New(providers []catwalk.Provider, isFirstRun bool) *Model {
-	return &Model{
+func New(providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent) *Model {
+	m := &Model{
 		keyMap:      DefaultKeyMap(),
 		providers:   providers,
 		isFirstRun:  isFirstRun,
 		currentPage: page.Welcome,
 		welcome:     welcome.New(),
+		agent:       ag,
 	}
+
+	// If we have an agent and it's not first run, go directly to chat.
+	if ag != nil && !isFirstRun {
+		m.chatPage = chat.New(ag)
+		m.currentPage = page.Chat
+	}
+
+	return m
 }
 
 // Init initializes the TUI.
 func (m *Model) Init() tea.Cmd {
-	// If not first run, we could skip to main page.
-	// For now, always show welcome on first run.
-	if m.isFirstRun {
-		return m.welcome.Init()
+	// If we have an agent and chat page is active, initialize it.
+	if m.currentPage == page.Chat && m.chatPage != nil {
+		return m.chatPage.Init()
 	}
 
-	// TODO: Go to main app if not first run.
-	// For now, just show welcome.
+	// For first run or if no agent, show welcome.
 	return m.welcome.Init()
 }
 
@@ -66,6 +78,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case welcome.StartWizardMsg:
 		return m.handleStartWizard()
 	case wizard.CompleteMsg:
+		// Wizard complete - transition to chat if we have an agent.
+		if m.agent != nil {
+			m.chatPage = chat.New(m.agent)
+			m.chatPage.SetSize(m.width, m.height)
+			m.chatPage.SetProgram(m.program)
+			m.currentPage = page.Chat
+			return m, m.chatPage.Init()
+		}
 		m.statusMsg = "Configuration saved successfully!"
 		return m, nil
 	case util.InfoMsg:
@@ -118,10 +138,20 @@ func (m *Model) routeToPage(msg tea.Msg) tea.Cmd {
 		return cmd
 	case page.Wizard:
 		return m.updateWizard(msg)
+	case page.Chat:
+		return m.updateChat(msg)
 	case page.Main:
 		return nil
 	}
 	return nil
+}
+
+func (m *Model) updateChat(msg tea.Msg) tea.Cmd {
+	if m.chatPage == nil {
+		return nil
+	}
+	_, cmd := m.chatPage.Update(msg)
+	return cmd
 }
 
 func (m *Model) updateWizard(msg tea.Msg) tea.Cmd {
@@ -160,6 +190,10 @@ func (m *Model) View() tea.View {
 		if m.wizard != nil {
 			content = m.wizard.View()
 		}
+	case page.Chat:
+		if m.chatPage != nil {
+			content = m.chatPage.View()
+		}
 	case page.Main:
 		content = m.renderMain()
 	default:
@@ -175,8 +209,15 @@ func (m *Model) View() tea.View {
 	view.Content = content
 
 	// Set cursor if available.
-	if m.currentPage == page.Wizard && m.wizard != nil {
-		view.Cursor = m.wizard.Cursor()
+	switch m.currentPage {
+	case page.Wizard:
+		if m.wizard != nil {
+			view.Cursor = m.wizard.Cursor()
+		}
+	case page.Chat:
+		if m.chatPage != nil {
+			view.Cursor = m.chatPage.Cursor()
+		}
 	}
 
 	return view
@@ -198,16 +239,25 @@ func (m *Model) updateComponentSizes() {
 	if m.wizard != nil {
 		m.wizard.SetSize(m.width, m.height)
 	}
+	if m.chatPage != nil {
+		m.chatPage.SetSize(m.width, m.height)
+	}
 }
 
 // Run starts the TUI program.
-func Run(providers []catwalk.Provider, isFirstRun bool) error {
+func Run(providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent) error {
 	// Initialize theme.
 	styles.NewManager()
 
-	model := New(providers, isFirstRun)
+	model := New(providers, isFirstRun, ag)
 	// In Bubble Tea v2, AltScreen and MouseMode are set in View()
 	p := tea.NewProgram(model)
+
+	// Set the program reference so chat can send stream messages.
+	model.program = p
+	if model.chatPage != nil {
+		model.chatPage.SetProgram(p)
+	}
 
 	_, err := p.Run()
 	if err != nil {

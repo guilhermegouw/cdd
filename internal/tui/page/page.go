@@ -11,6 +11,8 @@ const (
 	Wizard ID = "wizard"
 	// Main is the main application page.
 	Main ID = "main"
+	// Chat is the chat interface.
+	Chat ID = "chat"
 )
 
 // ChangeMsg is used to change the current page.

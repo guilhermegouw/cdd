@@ -1,0 +1,275 @@
+// Package chat provides the chat page for CDD CLI.
+package chat
+
+import (
+	"context"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/guilhermegouw/cdd/internal/agent"
+	"github.com/guilhermegouw/cdd/internal/tui/styles"
+	"github.com/guilhermegouw/cdd/internal/tui/util"
+)
+
+// Stream message types for TUI updates.
+type (
+	// StreamTextMsg is sent when text is streamed.
+	StreamTextMsg struct {
+		Text string
+	}
+
+	// StreamToolCallMsg is sent when a tool is called.
+	StreamToolCallMsg struct {
+		ToolCall agent.ToolCall
+	}
+
+	// StreamToolResultMsg is sent when a tool completes.
+	StreamToolResultMsg struct {
+		ToolResult agent.ToolResult
+	}
+
+	// StreamCompleteMsg is sent when streaming completes.
+	StreamCompleteMsg struct{}
+
+	// StreamErrorMsg is sent when an error occurs.
+	StreamErrorMsg struct {
+		Error error
+	}
+)
+
+// Model is the chat page model.
+type Model struct {
+	agent       *agent.DefaultAgent
+	messages    *MessageList
+	input       *Input
+	status      *StatusBar
+	program     *tea.Program
+	sessionID   string
+	isStreaming bool
+	width       int
+	height      int
+}
+
+// New creates a new chat page model.
+func New(ag *agent.DefaultAgent) *Model {
+	return &Model{
+		agent:    ag,
+		messages: NewMessageList(),
+		input:    NewInput(),
+		status:   NewStatusBar(),
+	}
+}
+
+// SetProgram sets the tea.Program for sending messages.
+func (m *Model) SetProgram(p *tea.Program) {
+	m.program = p
+}
+
+// Init initializes the chat page.
+func (m *Model) Init() tea.Cmd {
+	// Get or create a session
+	session := m.agent.Sessions().Current()
+	m.sessionID = session.ID
+	m.messages.SetMessages(session.Messages)
+
+	return m.input.Init()
+}
+
+// Update handles messages.
+func (m *Model) Update(msg tea.Msg) (util.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		return m.handleKey(msg)
+
+	case StreamTextMsg:
+		if len(m.messages.messages) > 0 {
+			m.messages.UpdateLast(m.messages.messages[len(m.messages.messages)-1].Content + msg.Text)
+		}
+		return m, nil
+
+	case StreamToolCallMsg:
+		m.status.SetToolName(msg.ToolCall.Name)
+		return m, nil
+
+	case StreamToolResultMsg:
+		m.status.SetStatus(StatusThinking)
+		return m, nil
+
+	case StreamCompleteMsg:
+		m.isStreaming = false
+		m.status.SetStatus(StatusReady)
+		m.input.Enable()
+		// Refresh messages from session
+		m.messages.SetMessages(m.agent.Sessions().GetMessages(m.sessionID))
+		return m, m.input.Focus()
+
+	case StreamErrorMsg:
+		m.isStreaming = false
+		m.status.SetError(msg.Error.Error())
+		m.input.Enable()
+		return m, m.input.Focus()
+	}
+
+	// Update input
+	var cmd tea.Cmd
+	m.input, cmd = m.input.Update(msg)
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+
+	return m, tea.Batch(cmds...)
+}
+
+func (m *Model) handleKey(msg tea.KeyMsg) (util.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		if m.isStreaming {
+			return m, nil
+		}
+
+		value := m.input.Value()
+		if value == "" {
+			return m, nil
+		}
+
+		// Clear input and start streaming
+		m.input.Clear()
+		m.input.Disable()
+		m.isStreaming = true
+		m.status.SetStatus(StatusThinking)
+
+		// Add placeholder for assistant response
+		m.messages.AppendMessage(agent.Message{
+			Role:    agent.RoleUser,
+			Content: value,
+		})
+		m.messages.AppendMessage(agent.Message{
+			Role:    agent.RoleAssistant,
+			Content: "",
+		})
+
+		// Send to agent
+		return m, m.sendMessage(value)
+
+	case "ctrl+c":
+		if m.isStreaming {
+			m.agent.Cancel(m.sessionID)
+			return m, nil
+		}
+		return m, tea.Quit
+
+	case "esc":
+		if m.isStreaming {
+			m.agent.Cancel(m.sessionID)
+			return m, nil
+		}
+	}
+
+	// Pass to input
+	var cmd tea.Cmd
+	m.input, cmd = m.input.Update(msg)
+	return m, cmd
+}
+
+func (m *Model) sendMessage(prompt string) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+
+		var streamedContent string
+
+		callbacks := agent.StreamCallbacks{
+			OnTextDelta: func(text string) error {
+				streamedContent += text
+				if m.program != nil {
+					m.program.Send(StreamTextMsg{Text: text})
+				}
+				return nil
+			},
+			OnToolCall: func(tc agent.ToolCall) error {
+				if m.program != nil {
+					m.program.Send(StreamToolCallMsg{ToolCall: tc})
+				}
+				return nil
+			},
+			OnToolResult: func(tr agent.ToolResult) error {
+				if m.program != nil {
+					m.program.Send(StreamToolResultMsg{ToolResult: tr})
+				}
+				return nil
+			},
+			OnComplete: func() error {
+				if m.program != nil {
+					m.program.Send(StreamCompleteMsg{})
+				}
+				return nil
+			},
+			OnError: func(err error) {
+				if m.program != nil {
+					m.program.Send(StreamErrorMsg{Error: err})
+				}
+			},
+		}
+
+		opts := agent.SendOptions{
+			SessionID: m.sessionID,
+		}
+
+		err := m.agent.Send(ctx, prompt, opts, callbacks)
+		if err != nil {
+			return StreamErrorMsg{Error: err}
+		}
+
+		return StreamCompleteMsg{}
+	}
+}
+
+// View renders the chat page.
+func (m *Model) View() string {
+	t := styles.CurrentTheme()
+
+	// Calculate heights
+	statusHeight := 1
+	inputHeight := 3
+	messagesHeight := m.height - statusHeight - inputHeight - 2
+
+	// Set component sizes
+	m.messages.SetSize(m.width, messagesHeight)
+	m.input.SetWidth(m.width)
+	m.status.SetWidth(m.width)
+
+	// Render components
+	messagesView := m.messages.View()
+	inputView := m.input.View()
+	statusView := m.status.View()
+
+	// Separator
+	separator := lipgloss.NewStyle().
+		Width(m.width).
+		BorderBottom(true).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(t.Border).
+		Render("")
+
+	return lipgloss.JoinVertical(lipgloss.Left,
+		messagesView,
+		separator,
+		inputView,
+		statusView,
+	)
+}
+
+// SetSize sets the chat page size.
+func (m *Model) SetSize(width, height int) {
+	m.width = width
+	m.height = height
+}
+
+// Cursor returns the cursor position.
+func (m *Model) Cursor() *tea.Cursor {
+	if !m.isStreaming {
+		return m.input.Cursor()
+	}
+	return nil
+}
