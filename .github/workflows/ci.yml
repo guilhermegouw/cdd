@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Go 1.25
+        run: |
+          wget -q https://go.dev/dl/go1.25.0.linux-amd64.tar.gz
+          sudo rm -rf /usr/local/go
+          sudo tar -C /usr/local -xzf go1.25.0.linux-amd64.tar.gz
+          echo "/usr/local/go/bin" >> $GITHUB_PATH
+
+      - name: Verify Go version
+        run: /usr/local/go/bin/go version
+
+      - name: Install and run golangci-lint
+        run: |
+          /usr/local/go/bin/go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+          ~/go/bin/golangci-lint run --timeout=5m
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Go 1.25
+        run: |
+          wget -q https://go.dev/dl/go1.25.0.linux-amd64.tar.gz
+          sudo rm -rf /usr/local/go
+          sudo tar -C /usr/local -xzf go1.25.0.linux-amd64.tar.gz
+          echo "/usr/local/go/bin" >> $GITHUB_PATH
+
+      - name: Download dependencies
+        run: /usr/local/go/bin/go mod download
+
+      - name: Run tests
+        run: /usr/local/go/bin/go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.out
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Go 1.25
+        run: |
+          wget -q https://go.dev/dl/go1.25.0.linux-amd64.tar.gz
+          sudo rm -rf /usr/local/go
+          sudo tar -C /usr/local -xzf go1.25.0.linux-amd64.tar.gz
+          echo "/usr/local/go/bin" >> $GITHUB_PATH
+
+      - name: Build
+        run: /usr/local/go/bin/go build -v ./...
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Go 1.25
+        run: |
+          wget -q https://go.dev/dl/go1.25.0.linux-amd64.tar.gz
+          sudo rm -rf /usr/local/go
+          sudo tar -C /usr/local -xzf go1.25.0.linux-amd64.tar.gz
+          echo "/usr/local/go/bin" >> $GITHUB_PATH
+
+      - name: Run govulncheck
+        # govulncheck has compatibility issues with Go 1.25, allow failure until fixed upstream
+        continue-on-error: true
+        run: |
+          /usr/local/go/bin/go install golang.org/x/vuln/cmd/govulncheck@latest
+          ~/go/bin/govulncheck ./...

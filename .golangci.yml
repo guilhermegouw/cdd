@@ -1,0 +1,123 @@
+version: "2"
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  default: none
+  enable:
+    # Default linters
+    - errcheck      # Check for unchecked errors
+    - govet         # Reports suspicious constructs
+    - ineffassign   # Detects unused variable assignments
+    - staticcheck   # Go static analysis
+    - unused        # Checks for unused constants, variables, functions, types
+
+    # Additional recommended linters
+    - bodyclose     # Check HTTP response body is closed
+    - copyloopvar   # Detects places where loop variables are copied
+    - dupl          # Code clone detection
+    - errname       # Check error names follow Go conventions
+    - errorlint     # Find issues with error wrapping
+    - exhaustive    # Check exhaustiveness of enum switch statements
+    - gochecknoinits # Check no init functions
+    - goconst       # Find repeated strings that could be constants
+    - gocritic      # Opinionated Go linter
+    - gocyclo       # Cyclomatic complexity checker
+    - godot         # Check comments end with a period
+    - gosec         # Security checker
+    - misspell      # Finds commonly misspelled English words
+    - nakedret      # Finds naked returns in functions
+    - nilerr        # Finds code returning nil when checking error
+    - noctx         # Finds http requests without context.Context
+    - prealloc      # Find slice declarations that could be preallocated
+    - predeclared   # Find code shadowing predeclared identifiers
+    - revive        # Fast, configurable linter
+    - tparallel     # Detect inappropriate use of t.Parallel()
+    - unconvert     # Remove unnecessary type conversions
+    - unparam       # Find unused function parameters
+    - whitespace    # Detect leading/trailing whitespace
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+
+    govet:
+      enable-all: true
+
+    gocyclo:
+      min-complexity: 15
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+      disabled-checks:
+        - hugeParam  # Can be noisy for structs
+
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: var-declaration
+        - name: var-naming
+
+    gosec:
+      excludes:
+        - G104  # Audit errors not checked (errcheck handles this)
+
+    nakedret:
+      max-func-lines: 30
+
+    dupl:
+      threshold: 100
+
+exclusions:
+  generated: lax
+  presets:
+    - comments
+    - common-false-positives
+    - legacy
+    - std-error-handling
+  rules:
+    # Test files can have longer functions and magic numbers
+    - path: "_test\\.go$"
+      linters:
+        - dupl
+        - gocyclo
+        - gosec
+        - errcheck
+
+    # Main files can have init functions
+    - path: "main\\.go$"
+      linters:
+        - gochecknoinits
+
+issues:
+  max-issues-per-linter: 50
+  max-same-issues: 3
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/guilhermegouw/cdd

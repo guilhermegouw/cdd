@@ -1,0 +1,121 @@
+version: "3"
+
+vars:
+  BINARY_NAME: cdd
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+  COMMIT:
+    sh: git rev-parse --short HEAD 2>/dev/null || echo "none"
+  BUILD_DATE:
+    sh: date -u '+%Y-%m-%dT%H:%M:%SZ'
+  LDFLAGS: >-
+    -X github.com/guilhermegouw/cdd/cmd.Version={{.VERSION}}
+    -X github.com/guilhermegouw/cdd/cmd.Commit={{.COMMIT}}
+    -X github.com/guilhermegouw/cdd/cmd.BuildDate={{.BUILD_DATE}}
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  # Development
+  build:
+    desc: Build the binary
+    cmds:
+      - go build -ldflags "{{.LDFLAGS}}" -o {{.BINARY_NAME}} .
+
+  run:
+    desc: Run the application
+    cmds:
+      - go run -ldflags "{{.LDFLAGS}}" . {{.CLI_ARGS}}
+
+  install:
+    desc: Install the binary to $GOPATH/bin
+    cmds:
+      - go install -ldflags "{{.LDFLAGS}}" .
+
+  # Quality checks
+  fmt:
+    desc: Format code
+    cmds:
+      - gofmt -w -s .
+      - goimports -w -local github.com/guilhermegouw/cdd .
+
+  lint:
+    desc: Run linters
+    cmds:
+      - golangci-lint run
+
+  lint:fix:
+    desc: Run linters and fix issues
+    cmds:
+      - golangci-lint run --fix
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  # Testing
+  test:
+    desc: Run tests
+    cmds:
+      - go test -v -race ./...
+
+  test:coverage:
+    desc: Run tests with coverage
+    cmds:
+      - go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+      - go tool cover -html=coverage.out -o coverage.html
+    generates:
+      - coverage.out
+      - coverage.html
+
+  test:short:
+    desc: Run short tests only
+    cmds:
+      - go test -v -short ./...
+
+  # Security
+  security:
+    desc: Run security checks
+    cmds:
+      - govulncheck ./...
+
+  # Dependencies
+  deps:
+    desc: Download and tidy dependencies
+    cmds:
+      - go mod download
+      - go mod tidy
+
+  deps:update:
+    desc: Update all dependencies
+    cmds:
+      - go get -u ./...
+      - go mod tidy
+
+  # Cleanup
+  clean:
+    desc: Remove build artifacts
+    cmds:
+      - rm -f {{.BINARY_NAME}}
+      - rm -f coverage.out coverage.html
+
+  # All-in-one checks
+  check:
+    desc: Run all checks (fmt, lint, vet, test)
+    cmds:
+      - task: fmt
+      - task: lint
+      - task: vet
+      - task: test
+
+  ci:
+    desc: Run CI checks (same as GitHub Actions)
+    cmds:
+      - task: lint
+      - task: test:coverage
+      - task: build
+      - task: security
