@@ -330,12 +330,31 @@ func (w *Wizard) View() string {
 		backHint = t.S().Subtle.Render("Press Esc to go back")
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left,
+	// Inner content centered.
+	innerContent := lipgloss.JoinVertical(lipgloss.Center,
 		progress,
 		"",
 		content,
 		"",
 		backHint,
+	)
+
+	// Box style with border.
+	boxWidth := min(w.width-4, 70)
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Border).
+		Padding(1, 3).
+		Width(boxWidth).
+		Align(lipgloss.Center)
+
+	box := boxStyle.Render(innerContent)
+
+	// Center the box on screen.
+	return lipgloss.Place(
+		w.width, w.height,
+		lipgloss.Center, lipgloss.Center,
+		box,
 	)
 }
 

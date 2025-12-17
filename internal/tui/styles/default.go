@@ -1,35 +1,35 @@
 package styles
 
-// NewDefaultTheme creates a clean dark theme for CDD.
+// NewDefaultTheme creates an ocean-inspired dark theme for CDD.
 func NewDefaultTheme() *Theme {
 	return &Theme{
 		Name:   "default",
 		IsDark: true,
 
-		// Clean blue/cyan tones
-		Primary:   ParseHex("#61afef"), // Soft blue
-		Secondary: ParseHex("#56b6c2"), // Cyan
-		Tertiary:  ParseHex("#3e4451"), // Dark gray-blue
-		Accent:    ParseHex("#c678dd"), // Purple accent
+		// Ocean blue tones
+		Primary:   ParseHex("#5eb5f7"), // Clear ocean blue
+		Secondary: ParseHex("#7ec8e8"), // Light sky blue
+		Tertiary:  ParseHex("#2d4a5e"), // Deep ocean
+		Accent:    ParseHex("#8fd4f4"), // Bright water
 
 		// Dark backgrounds
-		BgBase:    ParseHex("#1e1e1e"), // Dark background
-		BgSubtle:  ParseHex("#252526"), // Slightly lighter
-		BgOverlay: ParseHex("#2d2d30"), // Overlay background
+		BgBase:    ParseHex("#0f1419"), // Deep sea dark
+		BgSubtle:  ParseHex("#1a2028"), // Slightly lighter
+		BgOverlay: ParseHex("#232a32"), // Overlay background
 
 		// Light foregrounds
-		FgBase:   ParseHex("#abb2bf"), // Light gray text
-		FgMuted:  ParseHex("#7f848e"), // Muted gray
-		FgSubtle: ParseHex("#5c6370"), // Subtle gray
+		FgBase:   ParseHex("#c5d1de"), // Soft white-blue
+		FgMuted:  ParseHex("#7a8b99"), // Muted blue-gray
+		FgSubtle: ParseHex("#4d5b66"), // Subtle blue-gray
 
 		// Borders
-		Border:      ParseHex("#3e4451"),
-		BorderFocus: ParseHex("#61afef"),
+		Border:      ParseHex("#2d4a5e"),
+		BorderFocus: ParseHex("#5eb5f7"),
 
 		// Status colors
-		Success: ParseHex("#98c379"), // Green
-		Error:   ParseHex("#e06c75"), // Red
-		Warning: ParseHex("#e5c07b"), // Yellow
-		Info:    ParseHex("#61afef"), // Blue
+		Success: ParseHex("#7ec8e8"), // Light blue (calm success)
+		Error:   ParseHex("#f4726d"), // Coral red
+		Warning: ParseHex("#f4c56d"), // Sandy amber
+		Info:    ParseHex("#5eb5f7"), // Ocean blue
 	}
 }

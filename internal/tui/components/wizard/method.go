@@ -66,16 +66,11 @@ func (a *AuthMethodChooser) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 func (a *AuthMethodChooser) View() string {
 	t := styles.CurrentTheme()
 
-	title := t.S().Title.Render("How would you like to authenticate with ") +
-		t.S().Success.Render(a.providerName) +
-		t.S().Title.Render("?")
+	title := t.S().Title.Render("How would you like to authenticate?")
 
-	// Calculate box dimensions.
-	boxWidth := (a.width - 6) / 2
-	if boxWidth < 20 {
-		boxWidth = 20
-	}
-	boxHeight := 5
+	// Fixed compact box dimensions.
+	boxWidth := 24
+	boxHeight := 3
 
 	// Style for boxes.
 	selectedBox := lipgloss.NewStyle().
@@ -99,16 +94,16 @@ func (a *AuthMethodChooser) View() string {
 
 	var oauthBox, apiKeyBox string
 	if a.selected == AuthMethodOAuth2 {
-		oauthBox = selectedBox.Render(selectedText.Render("Claude Account\nwith Subscription"))
+		oauthBox = selectedBox.Render(selectedText.Render("Claude Account"))
 		apiKeyBox = unselectedBox.Render(unselectedText.Render("API Key"))
 	} else {
-		oauthBox = unselectedBox.Render(unselectedText.Render("Claude Account\nwith Subscription"))
+		oauthBox = unselectedBox.Render(unselectedText.Render("Claude Account"))
 		apiKeyBox = selectedBox.Render(selectedText.Render("API Key"))
 	}
 
-	boxes := lipgloss.JoinHorizontal(lipgloss.Center, oauthBox, "  ", apiKeyBox)
+	boxes := lipgloss.JoinHorizontal(lipgloss.Center, oauthBox, " ", apiKeyBox)
 
-	help := t.S().Muted.Render("Use Tab or ←/→ to switch, Enter to select")
+	help := t.S().Muted.Render("Tab or ←/→ to switch • Enter to select")
 
 	return lipgloss.JoinVertical(lipgloss.Center,
 		title,

@@ -54,6 +54,7 @@ func (w *Welcome) View() string {
 		t.S().Text.Render("Context-Driven Development"),
 		"",
 		t.S().Muted.Render("Spec → Plan → Execute → Sync"),
+		t.S().Subtle.Italic(true).Render("Context captured once. AI understands forever."),
 		"",
 		t.S().Subtitle.Render("Let's configure your AI assistant."),
 	}

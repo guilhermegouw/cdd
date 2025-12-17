@@ -144,7 +144,8 @@ func (m *Model) View() tea.View {
 	var view tea.View
 	view.AltScreen = true
 	view.MouseMode = tea.MouseModeCellMotion
-	view.BackgroundColor = t.BgBase
+	// Don't force background color - let terminal use its native background
+	// to avoid polluting the terminal state on exit
 
 	if !m.ready {
 		view.Content = "Loading..."
