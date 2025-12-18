@@ -47,11 +47,17 @@ func (i *Input) Update(msg tea.Msg) (*Input, tea.Cmd) {
 func (i *Input) View() string {
 	t := styles.CurrentTheme()
 
+	// Ensure width is never negative
+	width := i.width - 4
+	if width < 1 {
+		width = 1
+	}
+
 	inputStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(t.BorderFocus).
 		Padding(0, 1).
-		Width(i.width - 4)
+		Width(width)
 
 	if !i.enabled {
 		inputStyle = inputStyle.BorderForeground(t.Border)
@@ -63,7 +69,12 @@ func (i *Input) View() string {
 // SetWidth sets the input width.
 func (i *Input) SetWidth(width int) {
 	i.width = width
-	i.textInput.SetWidth(width - 8) // Account for border and padding
+	// Ensure textinput width is never negative
+	inputWidth := width - 8 // Account for border and padding
+	if inputWidth < 1 {
+		inputWidth = 1
+	}
+	i.textInput.SetWidth(inputWidth)
 }
 
 // Value returns the current input value.

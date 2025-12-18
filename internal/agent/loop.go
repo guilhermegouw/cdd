@@ -10,6 +10,10 @@ import (
 	"github.com/guilhermegouw/cdd/internal/tools"
 )
 
+// oauthSystemHeader is required as the first system content block for OAuth authentication.
+// This must be sent as a separate block, not concatenated with other prompts.
+const oauthSystemHeader = "You are Claude Code, Anthropic's official CLI for Claude."
+
 // DefaultAgent implements the Agent interface using Fantasy.
 type DefaultAgent struct {
 	model        fantasy.LanguageModel
@@ -73,26 +77,36 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 	a.sessions.AddMessage(sessionID, userMsg)
 
 	// Build Fantasy agent
-	fantasyOpts := []fantasy.AgentOption{
-		fantasy.WithSystemPrompt(a.systemPrompt),
-	}
+	// Note: We don't use WithSystemPrompt because OAuth requires the system
+	// prompt to be sent as separate content blocks with the OAuth header first.
+	fantasyOpts := []fantasy.AgentOption{}
 	if len(a.tools) > 0 {
 		fantasyOpts = append(fantasyOpts, fantasy.WithTools(a.tools...))
 	}
 
 	agent := fantasy.NewAgent(a.model, fantasyOpts...)
 
-	// Prepare history
-	history := a.buildHistory(sessionID)
+	// Prepare history with system messages at the start
+	// OAuth requires "You are Claude Code..." as a separate first block
+	var messages []fantasy.Message
+	messages = append(messages, fantasy.NewSystemMessage(
+		oauthSystemHeader,  // First block - required for OAuth
+		a.systemPrompt,     // Second block - actual system prompt
+	))
+	messages = append(messages, a.buildHistory(sessionID)...)
 
 	// Stream call options
 	streamOpts := fantasy.AgentStreamCall{
 		Prompt:   prompt,
-		Messages: history,
+		Messages: messages,
 	}
-	if opts.MaxTokens > 0 {
-		streamOpts.MaxOutputTokens = &opts.MaxTokens
+
+	// Set max tokens (Anthropic API requires this)
+	maxTokens := opts.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = 8192 // Default max tokens
 	}
+	streamOpts.MaxOutputTokens = &maxTokens
 	if opts.Temperature != nil {
 		streamOpts.Temperature = opts.Temperature
 	}

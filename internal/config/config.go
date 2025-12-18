@@ -88,7 +88,9 @@ func (pc *ProviderConfig) SetupClaudeCode() {
 		pc.ExtraHeaders = make(map[string]string)
 	}
 	pc.ExtraHeaders["anthropic-version"] = "2023-06-01"
-	pc.ExtraHeaders["anthropic-beta"] = "oauth-2025-04-20"
+	// OAuth requires specific beta headers for Claude Code subscription
+	pc.ExtraHeaders["anthropic-beta"] = "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14"
+	pc.ExtraHeaders["User-Agent"] = "ai-sdk/anthropic"
 }
 
 // Config is the top-level configuration structure.

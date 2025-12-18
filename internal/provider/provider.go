@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"net/http"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
@@ -166,15 +168,30 @@ func (b *Builder) buildOpenAIProvider(baseURL, apiKey string, headers map[string
 // buildAnthropicProvider creates an Anthropic fantasy provider.
 func (b *Builder) buildAnthropicProvider(baseURL, apiKey string, headers map[string]string) (fantasy.Provider, error) {
 	var opts []anthropic.Option
+	isOAuth := strings.HasPrefix(apiKey, "Bearer ")
 
 	// Handle OAuth token format.
-	if strings.HasPrefix(apiKey, "Bearer ") {
+	if isOAuth {
+		// Prevent the SDK from picking up the API key from env.
+		// This avoids conflict between OAuth Bearer token and x-api-key header.
+		os.Setenv("ANTHROPIC_API_KEY", "")
+
 		headers["Authorization"] = apiKey
+
+		// Use custom HTTP client to strip x-stainless-* headers for OAuth
+		httpClient := &http.Client{
+			Transport: &oauthTransport{
+				base:    http.DefaultTransport,
+				headers: headers,
+			},
+		}
+		opts = append(opts, anthropic.WithHTTPClient(httpClient))
 	} else if apiKey != "" {
 		opts = append(opts, anthropic.WithAPIKey(apiKey))
 	}
 
-	if len(headers) > 0 {
+	// Only add headers via WithHeaders if not using OAuth (OAuth uses custom transport)
+	if !isOAuth && len(headers) > 0 {
 		opts = append(opts, anthropic.WithHeaders(headers))
 	}
 	if baseURL != "" {
@@ -182,4 +199,34 @@ func (b *Builder) buildAnthropicProvider(baseURL, apiKey string, headers map[str
 	}
 
 	return anthropic.New(opts...)
+}
+
+// oauthTransport is a custom HTTP transport for OAuth that removes
+// x-api-key and x-stainless-* headers and adds OAuth headers.
+type oauthTransport struct {
+	base    http.RoundTripper
+	headers map[string]string
+}
+
+func (t *oauthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Clone the request to avoid mutating the original
+	reqCopy := req.Clone(req.Context())
+
+	// Remove x-api-key header (SDK might add it)
+	reqCopy.Header.Del("x-api-key")
+	reqCopy.Header.Del("X-Api-Key")
+
+	// Remove x-stainless-* headers (SDK adds these, OAuth may reject them)
+	for key := range reqCopy.Header {
+		if strings.HasPrefix(strings.ToLower(key), "x-stainless") {
+			reqCopy.Header.Del(key)
+		}
+	}
+
+	// Add our OAuth headers
+	for key, value := range t.headers {
+		reqCopy.Header.Set(key, value)
+	}
+
+	return t.base.RoundTrip(reqCopy)
 }

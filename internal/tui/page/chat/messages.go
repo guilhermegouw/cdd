@@ -4,17 +4,20 @@ import (
 	"fmt"
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
+	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
 	"github.com/guilhermegouw/cdd/internal/agent"
 	"github.com/guilhermegouw/cdd/internal/tui/styles"
 )
 
-// MessageList displays the conversation messages.
+// MessageList displays the conversation messages with scrolling support.
 type MessageList struct {
 	messages []agent.Message
+	viewport viewport.Model
 	width    int
 	height   int
-	offset   int
+	ready    bool
 }
 
 // NewMessageList creates a new message list component.
@@ -27,11 +30,13 @@ func NewMessageList() *MessageList {
 // SetMessages sets the messages to display.
 func (m *MessageList) SetMessages(messages []agent.Message) {
 	m.messages = messages
+	m.updateContent()
 }
 
 // AppendMessage adds a message to the list.
 func (m *MessageList) AppendMessage(msg agent.Message) {
 	m.messages = append(m.messages, msg)
+	m.updateContent()
 }
 
 // UpdateLast updates the last message (for streaming).
@@ -40,39 +45,61 @@ func (m *MessageList) UpdateLast(content string) {
 		return
 	}
 	m.messages[len(m.messages)-1].Content = content
+	m.updateContent()
 }
 
 // SetSize sets the component size.
 func (m *MessageList) SetSize(width, height int) {
 	m.width = width
 	m.height = height
-}
 
-// ScrollUp scrolls the message list up.
-func (m *MessageList) ScrollUp() {
-	if m.offset > 0 {
-		m.offset--
+	if !m.ready {
+		m.viewport = viewport.New(
+			viewport.WithWidth(width),
+			viewport.WithHeight(height),
+		)
+		m.viewport.MouseWheelEnabled = true
+		m.ready = true
+	} else {
+		m.viewport.SetWidth(width)
+		m.viewport.SetHeight(height)
 	}
+	m.updateContent()
 }
 
-// ScrollDown scrolls the message list down.
-func (m *MessageList) ScrollDown() {
-	// We'll handle bounds in View
-	m.offset++
-}
-
-// ScrollToBottom scrolls to the bottom of the list.
-func (m *MessageList) ScrollToBottom() {
-	m.offset = 0 // We render bottom-up, so 0 is the bottom
+// Update handles viewport events.
+func (m *MessageList) Update(msg tea.Msg) (*MessageList, tea.Cmd) {
+	var cmd tea.Cmd
+	m.viewport, cmd = m.viewport.Update(msg)
+	return m, cmd
 }
 
 // View renders the message list.
 func (m *MessageList) View() string {
+	if !m.ready {
+		return "Loading..."
+	}
+	return m.viewport.View()
+}
+
+// ScrollToBottom scrolls to the bottom of the list.
+func (m *MessageList) ScrollToBottom() {
+	m.viewport.GotoBottom()
+}
+
+// updateContent re-renders all messages and updates the viewport.
+func (m *MessageList) updateContent() {
+	if !m.ready {
+		return
+	}
+
 	t := styles.CurrentTheme()
 
 	if len(m.messages) == 0 {
 		empty := t.S().Muted.Render("No messages yet. Type something to start chatting.")
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, empty)
+		content := lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, empty)
+		m.viewport.SetContent(content)
+		return
 	}
 
 	// Render messages
@@ -84,19 +111,25 @@ func (m *MessageList) View() string {
 	// Join with spacing
 	content := strings.Join(rendered, "\n\n")
 
-	// Create scrollable container
-	containerStyle := lipgloss.NewStyle().
-		Width(m.width).
-		Height(m.height).
-		Padding(0, 1)
+	// Add padding
+	paddedContent := lipgloss.NewStyle().
+		Width(m.width - 2).
+		Padding(0, 1).
+		Render(content)
 
-	return containerStyle.Render(content)
+	m.viewport.SetContent(paddedContent)
+
+	// Auto-scroll to bottom when new content is added
+	m.viewport.GotoBottom()
 }
 
 func (m *MessageList) renderMessage(msg agent.Message) string {
 	t := styles.CurrentTheme()
 
 	contentWidth := m.width - 4 // Account for padding
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
 
 	switch msg.Role {
 	case agent.RoleUser:

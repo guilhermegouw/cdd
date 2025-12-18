@@ -39,14 +39,21 @@ func runTUI(_ *cobra.Command, _ []string) error {
 	// Check if this is first run.
 	isFirstRun := config.IsFirstRun()
 
-	// Load providers from catwalk (for the wizard).
-	cfg := config.NewConfig()
-
-	// Try to load providers even if config doesn't exist.
-	providers, err := config.LoadProviders(cfg)
+	// Try to load full config from disk.
+	cfg, err := config.Load()
 	if err != nil {
-		// If we can't load providers, show an error.
-		fmt.Fprintf(os.Stderr, "Warning: Failed to load providers: %v\n", err)
+		// If config fails to load, create empty config for wizard.
+		cfg = config.NewConfig()
+	}
+
+	// Get providers for the wizard.
+	providers := cfg.KnownProviders()
+	if len(providers) == 0 {
+		// Try to load providers if not already loaded.
+		providers, err = config.LoadProviders(cfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Failed to load providers: %v\n", err)
+		}
 	}
 
 	// Try to create the agent if we have a valid configuration.
@@ -92,6 +99,9 @@ func createAgent(cfg *config.Config) (*agent.DefaultAgent, error) {
 	return agent.New(agentCfg), nil
 }
 
+// defaultSystemPrompt is the main system prompt for the agent.
+// Note: The OAuth header "You are Claude Code..." is added separately in the agent
+// as a separate content block, as required by Anthropic's OAuth API.
 const defaultSystemPrompt = `You are CDD (Context-Driven Development), an AI coding assistant.
 
 You help developers write, understand, and improve code through structured workflows.

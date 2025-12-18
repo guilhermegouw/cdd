@@ -112,11 +112,18 @@ func (m *Model) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 		return m, m.input.Focus()
 	}
 
+	// Update messages (for viewport scrolling)
+	var msgCmd tea.Cmd
+	m.messages, msgCmd = m.messages.Update(msg)
+	if msgCmd != nil {
+		cmds = append(cmds, msgCmd)
+	}
+
 	// Update input
-	var cmd tea.Cmd
-	m.input, cmd = m.input.Update(msg)
-	if cmd != nil {
-		cmds = append(cmds, cmd)
+	var inputCmd tea.Cmd
+	m.input, inputCmd = m.input.Update(msg)
+	if inputCmd != nil {
+		cmds = append(cmds, inputCmd)
 	}
 
 	return m, tea.Batch(cmds...)
@@ -165,6 +172,12 @@ func (m *Model) handleKey(msg tea.KeyMsg) (util.Model, tea.Cmd) {
 			m.agent.Cancel(m.sessionID)
 			return m, nil
 		}
+
+	// Scroll keys - pass to message list viewport
+	case "up", "down", "pgup", "pgdown", "home", "end":
+		var cmd tea.Cmd
+		m.messages, cmd = m.messages.Update(msg)
+		return m, cmd
 	}
 
 	// Pass to input

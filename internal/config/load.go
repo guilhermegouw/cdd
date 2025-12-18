@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/adrg/xdg"
+	"github.com/charmbracelet/catwalk/pkg/catwalk"
 )
 
 const configFileName = "cdd.json"
@@ -181,8 +182,14 @@ func configureProviders(cfg *Config, resolver *Resolver) {
 				userConfig.BaseURL = resolved
 			}
 		} else {
-			// Use catwalk default endpoint.
-			userConfig.BaseURL = p.APIEndpoint
+			// Use catwalk default endpoint, resolved from environment.
+			resolved, err := resolver.Resolve(p.APIEndpoint)
+			if err == nil {
+				userConfig.BaseURL = resolved
+			} else {
+				// Fallback to hardcoded defaults if env var not set.
+				userConfig.BaseURL = getDefaultAPIEndpoint(p.Type)
+			}
 		}
 
 		// Set provider metadata from catwalk.
@@ -213,6 +220,11 @@ func configureProviders(cfg *Config, resolver *Resolver) {
 		// Initialize extra headers map if needed.
 		if userConfig.ExtraHeaders == nil {
 			userConfig.ExtraHeaders = make(map[string]string)
+		}
+
+		// Configure OAuth authentication if present.
+		if userConfig.OAuthToken != nil {
+			userConfig.SetupClaudeCode()
 		}
 	}
 }
@@ -290,6 +302,18 @@ func applyDefaults(cfg *Config) {
 	// Set default data directory.
 	if cfg.Options.DataDir == "" {
 		cfg.Options.DataDir = filepath.Join(xdg.DataHome, appName)
+	}
+}
+
+// getDefaultAPIEndpoint returns the default API endpoint for a provider type.
+func getDefaultAPIEndpoint(providerType catwalk.Type) string {
+	switch providerType {
+	case "anthropic":
+		return "https://api.anthropic.com"
+	case "openai":
+		return "https://api.openai.com/v1"
+	default:
+		return ""
 	}
 }
 
