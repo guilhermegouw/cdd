@@ -12,6 +12,7 @@ import (
 	"charm.land/fantasy"
 )
 
+//nolint:gocyclo // Test functions naturally have high complexity
 func TestBashTool(t *testing.T) {
 	// Skip on Windows for now - bash tests are Unix-specific
 	if runtime.GOOS == "windows" {
@@ -22,7 +23,7 @@ func TestBashTool(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck // Cleanup in tests
 
 	tool := NewBashTool(tmpDir)
 	ctx := context.Background()
@@ -92,7 +93,7 @@ func TestBashTool(t *testing.T) {
 	t.Run("working directory", func(t *testing.T) {
 		// Create a subdirectory
 		subDir := filepath.Join(tmpDir, "subdir")
-		if err := os.MkdirAll(subDir, 0755); err != nil {
+		if err := os.MkdirAll(subDir, 0o755); err != nil { //nolint:gosec // Test directory
 			t.Fatalf("Failed to create subdir: %v", err)
 		}
 
@@ -134,7 +135,7 @@ func TestBashToolBannedCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck // Cleanup in tests
 
 	tool := NewBashTool(tmpDir)
 	ctx := context.Background()

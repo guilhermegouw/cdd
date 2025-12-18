@@ -11,13 +11,14 @@ import (
 	"charm.land/fantasy"
 )
 
+//nolint:gocyclo // Test functions naturally have high complexity
 func TestWriteTool(t *testing.T) {
 	// Create a temporary directory for tests
 	tmpDir, err := os.MkdirTemp("", "write_test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck // Cleanup in tests
 
 	// Clear file records before each test
 	ClearFileRecords()

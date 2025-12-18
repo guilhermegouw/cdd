@@ -11,13 +11,14 @@ import (
 	"charm.land/fantasy"
 )
 
+//nolint:gocyclo // Test functions naturally have high complexity
 func TestReadTool(t *testing.T) {
 	// Create a temporary directory for tests
 	tmpDir, err := os.MkdirTemp("", "read_test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck // Cleanup in tests
 
 	// Create test files
 	testFile := filepath.Join(tmpDir, "test.txt")
@@ -128,7 +129,7 @@ func TestReadToolLongLines(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck // Cleanup in tests
 
 	// Create file with a very long line
 	longLine := strings.Repeat("x", MaxLineLength+100)

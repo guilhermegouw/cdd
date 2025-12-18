@@ -11,13 +11,14 @@ import (
 	"charm.land/fantasy"
 )
 
+//nolint:gocyclo // Test functions naturally have high complexity
 func TestGrepTool(t *testing.T) {
 	// Create a temporary directory structure for tests
 	tmpDir, err := os.MkdirTemp("", "grep_test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck // Cleanup in tests
 
 	// Create test files with content to search
 	files := map[string]string{

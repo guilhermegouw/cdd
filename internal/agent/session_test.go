@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+//nolint:gocyclo // Test functions naturally have high complexity
 func TestSessionStore(t *testing.T) {
 	t.Run("create session", func(t *testing.T) {
 		store := NewSessionStore()
@@ -51,7 +52,7 @@ func TestSessionStore(t *testing.T) {
 
 		current := store.Current()
 		if current == nil {
-			t.Error("Expected current session to be created")
+			t.Fatal("Expected current session to be created")
 		}
 		if current.Title != "New Session" {
 			t.Errorf("Expected default title 'New Session', got %q", current.Title)
@@ -143,6 +144,7 @@ func TestSessionStore(t *testing.T) {
 	})
 }
 
+//nolint:gocyclo // Test functions naturally have high complexity
 func TestSessionStoreMessages(t *testing.T) {
 	t.Run("add message", func(t *testing.T) {
 		store := NewSessionStore()
@@ -270,14 +272,14 @@ func TestSessionStoreConcurrency(t *testing.T) {
 	done := make(chan bool)
 
 	for i := 0; i < 10; i++ {
-		go func(n int) {
+		go func() {
 			store.AddMessage(session.ID, Message{
 				Role:    RoleUser,
 				Content: "Message",
 			})
 			store.GetMessages(session.ID)
 			done <- true
-		}(i)
+		}()
 	}
 
 	// Wait for all goroutines

@@ -1,3 +1,4 @@
+//nolint:dupl // Test cases are intentionally similar but test different scenarios
 package tools
 
 import (
@@ -11,13 +12,14 @@ import (
 	"charm.land/fantasy"
 )
 
+//nolint:gocyclo // Test functions naturally have high complexity
 func TestEditTool(t *testing.T) {
 	// Create a temporary directory for tests
 	tmpDir, err := os.MkdirTemp("", "edit_test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir) //nolint:errcheck // Cleanup in tests
 
 	tool := NewEditTool(tmpDir)
 	ctx := context.Background()

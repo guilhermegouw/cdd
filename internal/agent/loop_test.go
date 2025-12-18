@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -9,7 +10,7 @@ import (
 	"charm.land/fantasy"
 )
 
-// mockModel implements fantasy.LanguageModel for testing
+// mockModel implements fantasy.LanguageModel for testing.
 type mockModel struct {
 	generateFunc func(ctx context.Context, call fantasy.Call) (*fantasy.Response, error)
 	streamFunc   func(ctx context.Context, call fantasy.Call) (fantasy.StreamResponse, error)
@@ -41,7 +42,7 @@ func (m *mockModel) StreamObject(ctx context.Context, call fantasy.ObjectCall) (
 func (m *mockModel) Provider() string { return "mock" }
 func (m *mockModel) Model() string    { return "mock-model" }
 
-// Ensure mockModel implements the interface
+// Ensure mockModel implements the interface.
 var _ fantasy.LanguageModel = (*mockModel)(nil)
 
 func TestAgentCreation(t *testing.T) {
@@ -76,7 +77,7 @@ func TestAgentSendErrors(t *testing.T) {
 		})
 
 		err := agent.Send(context.Background(), "", SendOptions{}, StreamCallbacks{})
-		if err != ErrEmptyPrompt {
+		if !errors.Is(err, ErrEmptyPrompt) {
 			t.Errorf("Expected ErrEmptyPrompt, got %v", err)
 		}
 	})
@@ -270,7 +271,7 @@ func TestAgentConcurrency(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
-		go func(n int) {
+		go func() {
 			defer wg.Done()
 
 			// Concurrent operations
@@ -278,7 +279,7 @@ func TestAgentConcurrency(t *testing.T) {
 			agent.SetTools(nil)
 			agent.IsBusy("session")
 			agent.Cancel("session")
-		}(i)
+		}()
 	}
 
 	done := make(chan struct{})
