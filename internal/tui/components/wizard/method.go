@@ -66,7 +66,7 @@ func (a *AuthMethodChooser) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 func (a *AuthMethodChooser) View() string {
 	t := styles.CurrentTheme()
 
-	title := t.S().Title.Render("How would you like to authenticate?")
+	title := t.S().Title.Render("How would you like to authenticate with " + a.providerName + "?")
 
 	// Fixed compact box dimensions.
 	boxWidth := 24
