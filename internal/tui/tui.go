@@ -249,6 +249,8 @@ func (m *Model) View() tea.View {
 		if m.chatPage != nil {
 			view.Cursor = m.chatPage.Cursor()
 		}
+	case page.Welcome, page.Main:
+		// No cursor for these pages
 	}
 
 	return view

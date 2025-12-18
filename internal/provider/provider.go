@@ -210,7 +210,7 @@ func (b *Builder) buildAnthropicProvider(baseURL, apiKey string, headers map[str
 	if isOAuth {
 		// Prevent the SDK from picking up the API key from env.
 		// This avoids conflict between OAuth Bearer token and x-api-key header.
-		os.Setenv("ANTHROPIC_API_KEY", "")
+		_ = os.Setenv("ANTHROPIC_API_KEY", "") //nolint:errcheck // Error extremely unlikely, safe to ignore
 
 		headers["Authorization"] = apiKey
 

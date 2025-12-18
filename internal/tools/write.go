@@ -21,9 +21,9 @@ type WriteParams struct {
 
 // WriteResponseMetadata provides metadata about the write operation.
 type WriteResponseMetadata struct {
-	FilePath  string `json:"file_path"`
-	BytesWritten int `json:"bytes_written"`
-	Created   bool   `json:"created"`
+	FilePath     string `json:"file_path"`
+	BytesWritten int    `json:"bytes_written"`
+	Created      bool   `json:"created"`
 }
 
 const writeDescription = `Writes content to a file on the local filesystem.
@@ -74,7 +74,7 @@ func NewWriteTool(workingDir string) fantasy.AgentTool {
 				}
 
 				// Check for no-op writes
-				oldContent, readErr := os.ReadFile(filePath)
+				oldContent, readErr := os.ReadFile(filePath) //nolint:gosec // G304: File path is validated above
 				if readErr == nil && string(oldContent) == params.Content {
 					return fantasy.NewTextErrorResponse(fmt.Sprintf(
 						"File %s already contains the exact content. No changes made.", filePath)), nil
@@ -85,12 +85,12 @@ func NewWriteTool(workingDir string) fantasy.AgentTool {
 
 			// Create parent directories if needed
 			dir := filepath.Dir(filePath)
-			if err := os.MkdirAll(dir, 0o755); err != nil {
+			if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // G301: Standard dir permissions for user files
 				return fantasy.ToolResponse{}, fmt.Errorf("error creating directory: %w", err)
 			}
 
 			// Write the file
-			if err := os.WriteFile(filePath, []byte(params.Content), 0o644); err != nil {
+			if err := os.WriteFile(filePath, []byte(params.Content), 0o644); err != nil { //nolint:gosec // G306: Standard file permissions for user files
 				return fantasy.ToolResponse{}, fmt.Errorf("error writing file: %w", err)
 			}
 

@@ -30,10 +30,10 @@ func TestGlobTool(t *testing.T) {
 	//     nested.txt
 
 	files := map[string]string{
-		"file1.go":        "package main",
-		"file2.go":        "package main",
-		"file3.txt":       "text file",
-		"subdir/nested.go": "package sub",
+		"file1.go":          "package main",
+		"file2.go":          "package main",
+		"file3.txt":         "text file",
+		"subdir/nested.go":  "package sub",
 		"subdir/nested.txt": "nested text",
 	}
 

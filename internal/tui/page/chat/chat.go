@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
 	"github.com/guilhermegouw/cdd/internal/agent"
 	"github.com/guilhermegouw/cdd/internal/debug"
 	"github.com/guilhermegouw/cdd/internal/tui/styles"

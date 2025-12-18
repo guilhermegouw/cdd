@@ -7,6 +7,7 @@ import (
 
 	"charm.land/fantasy"
 	"github.com/google/uuid"
+
 	"github.com/guilhermegouw/cdd/internal/tools"
 )
 
@@ -39,6 +40,8 @@ func New(cfg Config) *DefaultAgent {
 }
 
 // Send sends a prompt and streams the response.
+//
+//nolint:gocyclo // Complex function handling streaming, tools, and history management
 func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions, callbacks StreamCallbacks) error {
 	if prompt == "" {
 		return ErrEmptyPrompt
@@ -90,8 +93,8 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 	// OAuth requires "You are Claude Code..." as a separate first block
 	var messages []fantasy.Message
 	messages = append(messages, fantasy.NewSystemMessage(
-		oauthSystemHeader,  // First block - required for OAuth
-		a.systemPrompt,     // Second block - actual system prompt
+		oauthSystemHeader, // First block - required for OAuth
+		a.systemPrompt,    // Second block - actual system prompt
 	))
 	messages = append(messages, a.buildHistory(sessionID)...)
 
@@ -161,6 +164,7 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 		}
 
 		// Extract content from result
+		//nolint:exhaustive // Media type handled by default case
 		switch result.Result.GetType() {
 		case fantasy.ToolResultContentTypeText:
 			if r, ok := fantasy.AsToolResultOutputType[fantasy.ToolResultOutputContentText](result.Result); ok {
@@ -171,6 +175,9 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 				tr.Content = r.Error.Error()
 				tr.IsError = true
 			}
+		default:
+			// Handle other types (e.g., Media) - treat as text fallback
+			tr.Content = "[Unsupported tool result type]"
 		}
 
 		// Add tool result as separate message
@@ -269,6 +276,9 @@ func (a *DefaultAgent) buildHistory(sessionID string) []fantasy.Message {
 					},
 				})
 			}
+
+		case RoleSystem:
+			// System messages are handled separately in Send(), skip in history
 		}
 	}
 

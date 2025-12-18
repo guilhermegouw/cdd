@@ -2,6 +2,7 @@ package chat
 
 import (
 	"charm.land/lipgloss/v2"
+
 	"github.com/guilhermegouw/cdd/internal/tui/styles"
 )
 
@@ -17,10 +18,10 @@ const (
 
 // StatusBar displays the current chat status.
 type StatusBar struct {
-	status    Status
-	toolName  string
-	errorMsg  string
-	width     int
+	status   Status
+	toolName string
+	errorMsg string
+	width    int
 }
 
 // NewStatusBar creates a new status bar.

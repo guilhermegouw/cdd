@@ -20,12 +20,12 @@ const (
 
 // Message represents a conversation message.
 type Message struct {
-	ID        string
-	Role      Role
-	Content   string
-	ToolCalls []ToolCall
+	ID          string
+	Role        Role
+	Content     string
+	ToolCalls   []ToolCall
 	ToolResults []ToolResult
-	CreatedAt time.Time
+	CreatedAt   time.Time
 }
 
 // ToolCall represents a tool call made by the assistant.
@@ -45,11 +45,11 @@ type ToolResult struct {
 
 // StreamCallbacks contains callbacks for streaming responses.
 type StreamCallbacks struct {
-	OnTextDelta    func(text string) error
-	OnToolCall     func(tc ToolCall) error
-	OnToolResult   func(tr ToolResult) error
-	OnComplete     func() error
-	OnError        func(err error)
+	OnTextDelta  func(text string) error
+	OnToolCall   func(tc ToolCall) error
+	OnToolResult func(tr ToolResult) error
+	OnComplete   func() error
+	OnError      func(err error)
 }
 
 // SendOptions contains options for sending a message.

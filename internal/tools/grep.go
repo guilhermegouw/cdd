@@ -3,6 +3,7 @@ package tools
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -164,6 +165,7 @@ func NewGrepTool(workingDir string) fantasy.AgentTool {
 		})
 }
 
+//nolint:gocyclo // Complex file walking and pattern matching logic
 func searchFiles(ctx context.Context, pattern, rootPath, include string, limit int) ([]grepMatch, bool, error) {
 	regex, err := getCachedRegex(pattern)
 	if err != nil {
@@ -190,7 +192,7 @@ func searchFiles(ctx context.Context, pattern, rootPath, include string, limit i
 		}
 
 		if err != nil {
-			return nil // Skip errors
+			return nil //nolint:nilerr // Skip inaccessible files, continue walking
 		}
 
 		if info.IsDir() {
@@ -223,7 +225,7 @@ func searchFiles(ctx context.Context, pattern, rootPath, include string, limit i
 
 		match, lineNum, charNum, lineText, err := fileContainsPattern(path, regex)
 		if err != nil || !match {
-			return nil
+			return nil //nolint:nilerr // Skip files with read errors, continue walking
 		}
 
 		matches = append(matches, grepMatch{
@@ -241,7 +243,7 @@ func searchFiles(ctx context.Context, pattern, rootPath, include string, limit i
 		return nil
 	})
 
-	if err != nil && err != filepath.SkipAll {
+	if err != nil && !errors.Is(err, filepath.SkipAll) {
 		return nil, false, err
 	}
 
@@ -259,11 +261,11 @@ func searchFiles(ctx context.Context, pattern, rootPath, include string, limit i
 }
 
 func fileContainsPattern(filePath string, pattern *regexp.Regexp) (bool, int, int, string, error) {
-	file, err := os.Open(filePath)
+	file, err := os.Open(filePath) //nolint:gosec // G304: File path comes from directory walk
 	if err != nil {
 		return false, 0, 0, "", err
 	}
-	defer file.Close()
+	defer file.Close() //nolint:errcheck // Error on close for read-only file is ignorable
 
 	scanner := bufio.NewScanner(file)
 	// Increase buffer size for large lines
@@ -284,16 +286,16 @@ func fileContainsPattern(filePath string, pattern *regexp.Regexp) (bool, int, in
 }
 
 func isTextFile(filePath string) bool {
-	file, err := os.Open(filePath)
+	file, err := os.Open(filePath) //nolint:gosec // G304: File path comes from directory walk
 	if err != nil {
 		return false
 	}
-	defer file.Close()
+	defer file.Close() //nolint:errcheck // Error on close for read-only file is ignorable
 
 	// Read first 512 bytes for MIME type detection
 	buffer := make([]byte, 512)
 	n, err := file.Read(buffer)
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		return false
 	}
 

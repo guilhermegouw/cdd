@@ -150,11 +150,11 @@ func addLineNumbers(content string, startLine int) string {
 }
 
 func readTextFile(filePath string, offset, limit int) (string, int, int, error) {
-	file, err := os.Open(filePath)
+	file, err := os.Open(filePath) //nolint:gosec // G304: File path is validated above
 	if err != nil {
 		return "", 0, 0, err
 	}
-	defer file.Close()
+	defer file.Close() //nolint:errcheck // Error on close for read-only file is ignorable
 
 	scanner := newLineScanner(file)
 	totalLines := 0

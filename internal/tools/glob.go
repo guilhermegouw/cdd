@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -94,6 +95,7 @@ type fileInfo struct {
 	modTime int64
 }
 
+//nolint:gocyclo // Complex file walking logic with multiple skip conditions
 func globFiles(ctx context.Context, pattern, searchPath string, limit int) ([]string, bool, error) {
 	var matches []fileInfo
 
@@ -109,7 +111,7 @@ func globFiles(ctx context.Context, pattern, searchPath string, limit int) ([]st
 		}
 
 		if err != nil {
-			return nil // Skip errors
+			return nil //nolint:nilerr // Skip inaccessible files, continue walking
 		}
 
 		// Skip directories themselves, but continue walking into them
@@ -134,13 +136,13 @@ func globFiles(ctx context.Context, pattern, searchPath string, limit int) ([]st
 		// Get relative path for matching
 		relPath, err := filepath.Rel(searchPath, path)
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // Skip files with path issues, continue walking
 		}
 
 		// Match the pattern
 		matched, err := matchGlob(pattern, relPath, hasDoublestar)
 		if err != nil || !matched {
-			return nil
+			return nil //nolint:nilerr // Skip non-matching or error patterns, continue walking
 		}
 
 		matches = append(matches, fileInfo{
@@ -156,7 +158,7 @@ func globFiles(ctx context.Context, pattern, searchPath string, limit int) ([]st
 		return nil
 	})
 
-	if err != nil && err != filepath.SkipAll {
+	if err != nil && !errors.Is(err, filepath.SkipAll) {
 		return nil, false, err
 	}
 
@@ -196,15 +198,17 @@ func matchDoublestar(pattern, path string) (bool, error) {
 	// Handle simple **/*.ext pattern
 	if strings.HasPrefix(pattern, "**/") {
 		subPattern := pattern[3:]
-		// Try matching against just the filename
-		if matched, _ := filepath.Match(subPattern, filepath.Base(path)); matched {
+		// Try matching against just the filename (error ignored - pattern already validated)
+		matched, _ := filepath.Match(subPattern, filepath.Base(path)) //nolint:errcheck // Pattern already validated
+		if matched {
 			return true, nil
 		}
 		// Try matching against each suffix of the path
 		parts := strings.Split(path, "/")
 		for i := range parts {
 			subPath := strings.Join(parts[i:], "/")
-			if matched, _ := filepath.Match(subPattern, subPath); matched {
+			matched, _ := filepath.Match(subPattern, subPath) //nolint:errcheck // Pattern already validated
+			if matched {
 				return true, nil
 			}
 		}
@@ -227,11 +231,13 @@ func matchDoublestar(pattern, path string) (bool, error) {
 			remaining = strings.TrimPrefix(path, prefix)
 		}
 
-		// Try matching suffix
-		if matched, _ := filepath.Match(suffix, remaining); matched {
+		// Try matching suffix (error ignored - pattern already validated)
+		matched, _ := filepath.Match(suffix, remaining) //nolint:errcheck // Pattern already validated
+		if matched {
 			return true, nil
 		}
-		if matched, _ := filepath.Match(suffix, filepath.Base(remaining)); matched {
+		matched, _ = filepath.Match(suffix, filepath.Base(remaining)) //nolint:errcheck // Pattern already validated
+		if matched {
 			return true, nil
 		}
 
@@ -239,7 +245,7 @@ func matchDoublestar(pattern, path string) (bool, error) {
 		parts := strings.Split(remaining, "/")
 		for i := range parts {
 			subPath := strings.Join(parts[i:], "/")
-			if matched, _ := filepath.Match(suffix, subPath); matched {
+			if matched, _ := filepath.Match(suffix, subPath); matched { //nolint:errcheck // Pattern already validated
 				return true, nil
 			}
 		}

@@ -10,7 +10,13 @@ import (
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
 )
 
-const configFileName = "cdd.json"
+const (
+	configFileName = "cdd.json"
+
+	// Default API endpoints for providers.
+	defaultAnthropicEndpoint = "https://api.anthropic.com"
+	defaultOpenAIEndpoint    = "https://api.openai.com/v1"
+)
 
 // Load finds and loads configuration from standard locations.
 // It merges global config with project config (project takes precedence),
@@ -153,6 +159,8 @@ func mergeConfig(dst, src *Config) {
 }
 
 // configureProviders merges user config with catwalk provider metadata.
+//
+//nolint:gocyclo // Complex config merging logic
 func configureProviders(cfg *Config, resolver *Resolver) {
 	knownProviders := cfg.KnownProviders()
 	for i := range knownProviders {
@@ -307,11 +315,12 @@ func applyDefaults(cfg *Config) {
 
 // getDefaultAPIEndpoint returns the default API endpoint for a provider type.
 func getDefaultAPIEndpoint(providerType catwalk.Type) string {
+	//nolint:exhaustive // Only certain provider types have known default endpoints
 	switch providerType {
-	case "anthropic":
-		return "https://api.anthropic.com"
-	case "openai":
-		return "https://api.openai.com/v1"
+	case catwalk.TypeAnthropic:
+		return defaultAnthropicEndpoint
+	case catwalk.TypeOpenAI:
+		return defaultOpenAIEndpoint
 	default:
 		return ""
 	}

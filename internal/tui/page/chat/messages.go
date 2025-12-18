@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
 	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
 	"github.com/guilhermegouw/cdd/internal/agent"
 	"github.com/guilhermegouw/cdd/internal/debug"
 	"github.com/guilhermegouw/cdd/internal/tui/styles"
@@ -14,17 +15,19 @@ import (
 
 // MessageList displays the conversation messages with scrolling support.
 type MessageList struct {
-	messages []agent.Message
-	viewport viewport.Model
-	width    int
-	height   int
-	ready    bool
+	messages   []agent.Message
+	viewport   viewport.Model
+	mdRenderer *MarkdownRenderer
+	width      int
+	height     int
+	ready      bool
 }
 
 // NewMessageList creates a new message list component.
 func NewMessageList() *MessageList {
 	return &MessageList{
-		messages: []agent.Message{},
+		messages:   []agent.Message{},
+		mdRenderer: NewMarkdownRenderer(),
 	}
 }
 
@@ -147,7 +150,7 @@ func (m *MessageList) updateContent() {
 
 	// Add padding
 	paddedContent := lipgloss.NewStyle().
-		Width(m.width - 2).
+		Width(m.width-2).
 		Padding(0, 1).
 		Render(content)
 
@@ -161,8 +164,6 @@ func (m *MessageList) updateContent() {
 }
 
 func (m *MessageList) renderMessage(msg agent.Message) string {
-	t := styles.CurrentTheme()
-
 	contentWidth := m.width - 4 // Account for padding
 	if contentWidth < 1 {
 		contentWidth = 1
@@ -175,9 +176,11 @@ func (m *MessageList) renderMessage(msg agent.Message) string {
 		return m.renderAssistantMessage(msg, contentWidth)
 	case agent.RoleTool:
 		return m.renderToolMessage(msg, contentWidth)
-	default:
-		return t.S().Muted.Render(msg.Content)
+	case agent.RoleSystem:
+		// System messages are typically not displayed in chat
+		return ""
 	}
+	return "" // Unreachable, all cases handled
 }
 
 func (m *MessageList) renderUserMessage(msg agent.Message, width int) string {
@@ -198,8 +201,15 @@ func (m *MessageList) renderAssistantMessage(msg agent.Message, width int) strin
 	parts = append(parts, header)
 
 	if msg.Content != "" {
-		content := t.S().Text.Width(width).Render(msg.Content)
-		parts = append(parts, content)
+		// Try to render markdown
+		rendered, err := m.mdRenderer.Render(msg.Content, width)
+		if err != nil {
+			// Fallback to plain text on error
+			rendered = t.S().Text.Width(width).Render(msg.Content)
+		}
+		// Trim trailing newlines that glamour adds
+		rendered = strings.TrimRight(rendered, "\n")
+		parts = append(parts, rendered)
 	}
 
 	// Render tool calls if any

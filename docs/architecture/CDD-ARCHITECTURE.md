@@ -1,4 +1,4 @@
-# Socrates CLI - Code Architecture
+# CDD CLI - Code Architecture
 
 > A clean-room implementation inspired by Crush's proven patterns, built for independence and flexibility.
 
@@ -28,7 +28,7 @@ We implement these patterns ourselves, using Crush as reference:
 - **Service Layer** - Each domain has its own service with broker
 - **Tool Interface** - Common interface for all agent tools
 
-### New for Socrates (Innovations)
+### New for CDD (Innovations)
 
 - **Phase-Based Agent** - Agent behavior changes based on current phase
 - **Dual Agent Pattern** - PhaseAgent for workflow, AgentInstance for debates
@@ -66,7 +66,7 @@ We implement these patterns ourselves, using Crush as reference:
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                              SOCRATES CLI                                    │
+│                                CDD CLI                                       │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  ┌─────────────────────────────────────────────────────────────────────────┐ │
@@ -97,7 +97,7 @@ We implement these patterns ourselves, using Crush as reference:
 │  │  │  │   Agent    │  │   Slash    │  │   Phase    │  │   Debate   │   │  │ │
 │  │  │  │            │  │   Router   │  │   System   │  │   Room     │   │  │ │
 │  │  │  │ • Loop     │  │            │  │            │  │            │   │  │ │
-│  │  │  │ • Tools    │  │ • /socrates│  │ • Socrates │  │ • Factory  │   │  │ │
+│  │  │  │ • Tools    │  │ • /cdd     │  │ • CDD      │  │ • Factory  │   │  │ │
 │  │  │  │ • Stream   │  │ • /plan    │  │ • Planner  │  │ • Strategy │   │  │ │
 │  │  │  │            │  │ • /exec    │  │ • Executor │  │ • Synth.   │   │  │ │
 │  │  │  └────────────┘  │ • /debate  │  │ • Chat     │  └────────────┘   │  │ │
@@ -150,7 +150,7 @@ We implement these patterns ourselves, using Crush as reference:
 ## 3. Package Structure
 
 ```
-socrates-cli/
+cdd/
 ├── main.go                          # Entry point
 ├── go.mod                           # Dependencies
 ├── go.sum
@@ -245,7 +245,7 @@ socrates-cli/
 │   │   ├── phase.go                 # Phase interface
 │   │   ├── registry.go              # Phase registry
 │   │   ├── chat.go                  # Default chat phase
-│   │   ├── socrates.go              # Requirements gathering
+│   │   ├── cdd.go                   # Requirements gathering
 │   │   ├── planner.go               # Implementation planning
 │   │   └── executor.go              # Code execution
 │   │
@@ -255,7 +255,7 @@ socrates-cli/
 │   │   ├── parser.go                # Parse "/cmd args" syntax
 │   │   └── commands/                # Built-in commands
 │   │       ├── help.go              # /help
-│   │       ├── socrates.go          # /socrates
+│   │       ├── cdd.go               # /cdd
 │   │       ├── plan.go              # /plan
 │   │       ├── exec.go              # /exec
 │   │       ├── debate.go            # /debate
@@ -671,7 +671,7 @@ func (m Model) View() string
 **Approach:** Build our own implementation inspired by Crush's patterns.
 
 ```
-Crush (Reference)              Socrates (Our Implementation)
+Crush (Reference)              CDD (Our Implementation)
 ─────────────────              ─────────────────────────────
 pubsub/broker.go      ──▶      pubsub/broker.go (similar pattern, our code)
 session/service.go    ──▶      session/service.go (our version)
@@ -722,7 +722,7 @@ User Input
     │
     ▼
 ┌─────────────────┐
-│  Slash Router   │──── /socrates ────▶ Switch to Socrates phase
+│  Slash Router   │──── /cdd ─────────▶ Switch to CDD phase
 │                 │──── /debate ──────▶ Start debate room
 │                 │──── /help ────────▶ Show help
 └────────┬────────┘
@@ -831,7 +831,7 @@ func (r *Room) Start(topic string) {
     }
   },
   "phases": {
-    "socrates": { "tier": "mid" },
+    "cdd": { "tier": "mid" },
     "planner": { "tier": "big" },
     "executor": { "tier": "mid" }
   },
@@ -922,30 +922,30 @@ func (p *BasePhase) PreProcess(input string) (string, error) { return input, nil
 func (p *BasePhase) PostProcess(output string) (string, error) { return output, nil }
 ```
 
-### 6.2 Socrates Phase
+### 6.2 CDD Phase
 
 ```go
 package phase
 
-type SocratesPhase struct {
+type CDDPhase struct {
     BasePhase
     questionCount int
     maxQuestions  int
 }
 
-func NewSocratesPhase() *SocratesPhase {
-    return &SocratesPhase{
+func NewCDDPhase() *CDDPhase {
+    return &CDDPhase{
         BasePhase: BasePhase{
-            name:        "socrates",
+            name:        "cdd",
             description: "Requirements gathering through questions",
-            prompt:      socratesSystemPrompt,
+            prompt:      cddSystemPrompt,
             tools:       []string{"view", "glob", "grep", "ls"},
         },
         maxQuestions: 10,
     }
 }
 
-const socratesSystemPrompt = `You are Socrates, a requirements gathering expert.
+const cddSystemPrompt = `You are CDD, a requirements gathering expert.
 
 Your goal is to deeply understand what the user wants to build through
 thoughtful questions. You should:
@@ -967,18 +967,18 @@ proceed to /plan to create an implementation plan.`
 ```go
 package slash
 
-// SocratesCommand switches to Socrates phase
-type SocratesCommand struct {
+// CDDCommand switches to CDD phase
+type CDDCommand struct {
     agent *agent.PhaseAgent
 }
 
-func (c *SocratesCommand) Name() string { return "socrates" }
-func (c *SocratesCommand) Description() string {
-    return "Start requirements gathering with Socrates"
+func (c *CDDCommand) Name() string { return "cdd" }
+func (c *CDDCommand) Description() string {
+    return "Start requirements gathering with CDD"
 }
 
-func (c *SocratesCommand) Execute(ctx context.Context, args string) error {
-    if err := c.agent.SwitchPhase("socrates"); err != nil {
+func (c *CDDCommand) Execute(ctx context.Context, args string) error {
+    if err := c.agent.SwitchPhase("cdd"); err != nil {
         return err
     }
 
@@ -1109,7 +1109,7 @@ func (s *ParallelStrategy) collectProposals(ctx context.Context, room *debate.Ro
 ### 7.1 Normal Chat Flow
 
 ```
-User Input ("/socrates implement auth")
+User Input ("/cdd implement auth")
     │
     ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -1121,15 +1121,15 @@ User Input ("/socrates implement auth")
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ Slash Router                                                │
-│   • Parse: name="socrates", args="implement auth"           │
+│   • Parse: name="cdd", args="implement auth"                │
 │   • Lookup command                                          │
-│   • Execute SocratesCommand                                 │
+│   • Execute CDDCommand                                      │
 └────────────────────────────┬────────────────────────────────┘
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ Phase Agent                                                 │
-│   • SwitchPhase("socrates")                                 │
+│   • SwitchPhase("cdd")                                      │
 │   • Update system prompt                                    │
 │   • Filter tools to read-only                               │
 │   • Send "implement auth" to coordinator                    │
@@ -1138,7 +1138,7 @@ User Input ("/socrates implement auth")
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ Agent Loop                                                  │
-│   • Build messages with Socrates system prompt              │
+│   • Build messages with CDD system prompt                   │
 │   • Call provider with filtered tools                       │
 │   • Stream response                                         │
 │   • Execute any tool calls                                  │
@@ -1347,10 +1347,10 @@ This architecture is built on these key principles:
 4. **Event-Driven Services** - Pub/Sub for decoupled communication
 5. **Extensible by Design** - Clear extension points for phases, commands, strategies, tools, providers
 
-### What Makes Socrates Different
+### What Makes CDD Different
 
 ```
-Standard Chat CLI              Socrates CLI
+Standard Chat CLI              CDD CLI
 ────────────────────          ────────────────────
 Single behavior         →     Phase-based behavior (CDD workflow)
 One conversation        →     Debate room (multi-agent)
@@ -1409,7 +1409,7 @@ session/, message/
 permission/
 tui/ (chat page)
 
-Result: Working CLI        Result: /socrates      Result: /debate
+Result: Working CLI        Result: /cdd           Result: /debate
                            /plan, /exec
 ```
 

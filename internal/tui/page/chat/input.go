@@ -1,9 +1,10 @@
 package chat
 
 import (
-	tea "charm.land/bubbletea/v2"
 	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
 	"github.com/guilhermegouw/cdd/internal/tui/styles"
 )
 

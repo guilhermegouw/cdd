@@ -84,12 +84,12 @@ func createNewFile(filePath, content string) (fantasy.ToolResponse, error) {
 
 	// Create parent directories
 	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // G301: Standard dir permissions for user files
 		return fantasy.ToolResponse{}, fmt.Errorf("failed to create parent directories: %w", err)
 	}
 
 	// Write file
-	if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil { //nolint:gosec // G306: Standard file permissions for user files
 		return fantasy.ToolResponse{}, fmt.Errorf("failed to write file: %w", err)
 	}
 
@@ -136,7 +136,7 @@ func deleteContent(filePath, oldString string, replaceAll bool) (fantasy.ToolRes
 	}
 
 	// Read content
-	content, err := os.ReadFile(filePath)
+	content, err := os.ReadFile(filePath) //nolint:gosec // G304: File path is validated above
 	if err != nil {
 		return fantasy.ToolResponse{}, fmt.Errorf("failed to read file: %w", err)
 	}
@@ -167,7 +167,7 @@ func deleteContent(filePath, oldString string, replaceAll bool) (fantasy.ToolRes
 	}
 
 	// Write file
-	if err := os.WriteFile(filePath, []byte(newContent), 0o644); err != nil {
+	if err := os.WriteFile(filePath, []byte(newContent), 0o644); err != nil { //nolint:gosec // G306: Standard file permissions for user files
 		return fantasy.ToolResponse{}, fmt.Errorf("failed to write file: %w", err)
 	}
 
@@ -216,7 +216,7 @@ func replaceContent(filePath, oldString, newString string, replaceAll bool) (fan
 	}
 
 	// Read content
-	content, err := os.ReadFile(filePath)
+	content, err := os.ReadFile(filePath) //nolint:gosec // G304: File path is validated above
 	if err != nil {
 		return fantasy.ToolResponse{}, fmt.Errorf("failed to read file: %w", err)
 	}
@@ -251,7 +251,7 @@ func replaceContent(filePath, oldString, newString string, replaceAll bool) (fan
 	}
 
 	// Write file
-	if err := os.WriteFile(filePath, []byte(newContent), 0o644); err != nil {
+	if err := os.WriteFile(filePath, []byte(newContent), 0o644); err != nil { //nolint:gosec // G306: Standard file permissions for user files
 		return fantasy.ToolResponse{}, fmt.Errorf("failed to write file: %w", err)
 	}
 

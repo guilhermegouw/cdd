@@ -10,10 +10,10 @@ import (
 )
 
 var (
-	enabled  bool
-	logFile  *os.File
-	mu       sync.Mutex
-	logPath  string
+	enabled bool
+	logFile *os.File
+	mu      sync.Mutex
+	logPath string
 )
 
 // Enable turns on debug logging to the specified file.
@@ -27,12 +27,12 @@ func Enable(path string) error {
 
 	// Ensure directory exists
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil { //nolint:gosec // Debug log dir needs to be readable
 		return fmt.Errorf("creating log directory: %w", err)
 	}
 
 	// Open log file (append mode)
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600) //nolint:gosec // G304: path is user-controlled debug config
 	if err != nil {
 		return fmt.Errorf("opening log file: %w", err)
 	}
@@ -47,8 +47,8 @@ func Enable(path string) error {
 	header += fmt.Sprintf("[%s] Time: %s\n", timestamp, time.Now().Format(time.RFC3339))
 	header += fmt.Sprintf("[%s] Log file: %s\n", timestamp, path)
 	header += fmt.Sprintf("[%s] ================================\n", timestamp)
-	logFile.WriteString(header)
-	logFile.Sync()
+	_, _ = logFile.WriteString(header) //nolint:errcheck // Intentionally ignore errors in debug logging
+	_ = logFile.Sync()                 //nolint:errcheck // Flush immediately
 
 	return nil
 }
@@ -63,7 +63,7 @@ func Disable() {
 	}
 
 	if logFile != nil {
-		logFile.Close()
+		_ = logFile.Close() //nolint:errcheck // Intentionally ignore error on close
 		logFile = nil
 	}
 	enabled = false
@@ -89,8 +89,8 @@ func Log(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	line := fmt.Sprintf("[%s] %s\n", timestamp, msg)
 
-	logFile.WriteString(line)
-	logFile.Sync() // Flush immediately for real-time viewing
+	_, _ = logFile.WriteString(line) //nolint:errcheck // Intentionally ignore errors in debug logging
+	_ = logFile.Sync()               //nolint:errcheck // Flush immediately for real-time viewing
 }
 
 // LogPath returns the path to the log file.
@@ -101,7 +101,7 @@ func LogPath() string {
 }
 
 // Event logs a TUI event with component context.
-func Event(component, eventType string, details string) {
+func Event(component, eventType, details string) {
 	Log("[%s] %s: %s", component, eventType, details)
 }
 

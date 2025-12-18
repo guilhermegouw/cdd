@@ -3,6 +3,7 @@ package tools
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"runtime"
@@ -107,9 +108,9 @@ func NewBashTool(workingDir string) fantasy.AgentTool {
 			// Execute command
 			var cmd *exec.Cmd
 			if runtime.GOOS == "windows" {
-				cmd = exec.CommandContext(ctx, "cmd", "/c", params.Command)
+				cmd = exec.CommandContext(ctx, "cmd", "/c", params.Command) //nolint:gosec // G204: Command execution is the tool's purpose
 			} else {
-				cmd = exec.CommandContext(ctx, "bash", "-c", params.Command)
+				cmd = exec.CommandContext(ctx, "bash", "-c", params.Command) //nolint:gosec // G204: Command execution is the tool's purpose
 			}
 			cmd.Dir = execWorkingDir
 
@@ -122,12 +123,13 @@ func NewBashTool(workingDir string) fantasy.AgentTool {
 
 			exitCode := 0
 			if err != nil {
-				if exitErr, ok := err.(*exec.ExitError); ok {
+				var exitErr *exec.ExitError
+				if errors.As(err, &exitErr) {
 					exitCode = exitErr.ExitCode()
-				} else if ctx.Err() == context.DeadlineExceeded {
+				} else if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 					return fantasy.NewTextErrorResponse(fmt.Sprintf(
 						"Command timed out after %v", timeout)), nil
-				} else if ctx.Err() == context.Canceled {
+				} else if errors.Is(ctx.Err(), context.Canceled) {
 					return fantasy.NewTextErrorResponse("Command was cancelled"), nil
 				}
 			}
