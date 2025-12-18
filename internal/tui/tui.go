@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
 
 	"github.com/guilhermegouw/cdd/internal/agent"
+	"github.com/guilhermegouw/cdd/internal/debug"
 	"github.com/guilhermegouw/cdd/internal/tui/components/welcome"
 	"github.com/guilhermegouw/cdd/internal/tui/components/wizard"
 	"github.com/guilhermegouw/cdd/internal/tui/page"
@@ -17,32 +18,38 @@ import (
 	"github.com/guilhermegouw/cdd/internal/tui/util"
 )
 
+// AgentFactory is a function that creates an agent from the current config.
+// It's called after the wizard completes to create the agent without restarting.
+type AgentFactory func() (*agent.DefaultAgent, error)
+
 // Model is the main TUI model.
 type Model struct {
-	welcome     *welcome.Welcome
-	wizard      *wizard.Wizard
-	chatPage    *chat.Model
-	agent       *agent.DefaultAgent
-	program     *tea.Program
-	currentPage page.ID
-	statusMsg   string
-	keyMap      KeyMap
-	providers   []catwalk.Provider
-	width       int
-	height      int
-	isFirstRun  bool
-	ready       bool
+	welcome      *welcome.Welcome
+	wizard       *wizard.Wizard
+	chatPage     *chat.Model
+	agent        *agent.DefaultAgent
+	agentFactory AgentFactory
+	program      *tea.Program
+	currentPage  page.ID
+	statusMsg    string
+	keyMap       KeyMap
+	providers    []catwalk.Provider
+	width        int
+	height       int
+	isFirstRun   bool
+	ready        bool
 }
 
 // New creates a new TUI model.
-func New(providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent) *Model {
+func New(providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent, factory AgentFactory) *Model {
 	m := &Model{
-		keyMap:      DefaultKeyMap(),
-		providers:   providers,
-		isFirstRun:  isFirstRun,
-		currentPage: page.Welcome,
-		welcome:     welcome.New(),
-		agent:       ag,
+		keyMap:       DefaultKeyMap(),
+		providers:    providers,
+		isFirstRun:   isFirstRun,
+		currentPage:  page.Welcome,
+		welcome:      welcome.New(),
+		agent:        ag,
+		agentFactory: factory,
 	}
 
 	// If we have an agent and it's not first run, go directly to chat.
@@ -67,18 +74,39 @@ func (m *Model) Init() tea.Cmd {
 
 // Update handles messages.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Log all incoming messages for debugging
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		debug.Event("tui", "WindowSize", fmt.Sprintf("width=%d height=%d", msg.Width, msg.Height))
 		m.handleWindowSize(msg)
 		return m, nil
 	case tea.KeyMsg:
+		debug.Event("tui", "KeyMsg", fmt.Sprintf("key=%q", msg.String()))
 		if cmd := m.handleGlobalKeys(msg); cmd != nil {
 			return m, cmd
 		}
+	case tea.MouseWheelMsg:
+		debug.Event("tui", "MouseWheel", fmt.Sprintf("button=%v x=%d y=%d", msg.Button, msg.X, msg.Y))
+	case tea.MouseClickMsg:
+		debug.Event("tui", "MouseClick", fmt.Sprintf("button=%v x=%d y=%d", msg.Button, msg.X, msg.Y))
+	case tea.MouseMotionMsg:
+		// Don't log motion events - too noisy
 	case welcome.StartWizardMsg:
+		debug.Event("tui", "StartWizard", "wizard starting")
 		return m.handleStartWizard()
 	case wizard.CompleteMsg:
-		// Wizard complete - transition to chat if we have an agent.
+		debug.Event("tui", "WizardComplete", "wizard finished")
+		// Wizard complete - create agent and transition to chat.
+		if m.agent == nil && m.agentFactory != nil {
+			ag, err := m.agentFactory()
+			if err != nil {
+				debug.Error("tui", err, "creating agent after wizard")
+				m.statusMsg = fmt.Sprintf("Failed to create agent: %v", err)
+				return m, nil
+			}
+			m.agent = ag
+		}
+
 		if m.agent != nil {
 			m.chatPage = chat.New(m.agent)
 			m.chatPage.SetSize(m.width, m.height)
@@ -92,8 +120,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = msg.Msg
 		return m, nil
 	case page.ChangeMsg:
+		debug.Event("tui", "PageChange", fmt.Sprintf("page=%s", msg.Page))
 		m.currentPage = msg.Page
 		return m, nil
+	default:
+		debug.Event("tui", "UnhandledMsg", fmt.Sprintf("type=%T", msg))
 	}
 
 	cmd := m.routeToPage(msg)
@@ -245,11 +276,11 @@ func (m *Model) updateComponentSizes() {
 }
 
 // Run starts the TUI program.
-func Run(providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent) error {
+func Run(providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent, factory AgentFactory) error {
 	// Initialize theme.
 	styles.NewManager()
 
-	model := New(providers, isFirstRun, ag)
+	model := New(providers, isFirstRun, ag, factory)
 	// In Bubble Tea v2, AltScreen and MouseMode are set in View()
 	p := tea.NewProgram(model)
 

@@ -16,6 +16,7 @@ import (
 	"charm.land/fantasy/providers/openai"
 
 	"github.com/guilhermegouw/cdd/internal/config"
+	"github.com/guilhermegouw/cdd/internal/oauth/claude"
 )
 
 // Model wraps a fantasy language model with its metadata.
@@ -46,6 +47,11 @@ func NewBuilder(cfg *config.Config) *Builder {
 
 // BuildModels creates the large and small models from configuration.
 func (b *Builder) BuildModels(ctx context.Context) (large, small Model, err error) {
+	// Refresh any expired OAuth tokens before building models.
+	if err := b.refreshExpiredTokens(ctx); err != nil {
+		return Model{}, Model{}, fmt.Errorf("refreshing tokens: %w", err)
+	}
+
 	// Build large model.
 	largeCfg, ok := b.cfg.Models[config.SelectedModelTypeLarge]
 	if !ok {
@@ -69,6 +75,36 @@ func (b *Builder) BuildModels(ctx context.Context) (large, small Model, err erro
 	}
 
 	return large, small, nil
+}
+
+// refreshExpiredTokens checks all providers for expired OAuth tokens and refreshes them.
+func (b *Builder) refreshExpiredTokens(ctx context.Context) error {
+	for providerID, providerCfg := range b.cfg.Providers {
+		if providerCfg.OAuthToken == nil {
+			continue
+		}
+
+		if !providerCfg.OAuthToken.IsExpired() {
+			continue
+		}
+
+		// Token is expired, try to refresh it.
+		newToken, err := claude.RefreshToken(ctx, providerCfg.OAuthToken.RefreshToken)
+		if err != nil {
+			return fmt.Errorf("refreshing token for provider %q: %w (re-authenticate with: rm ~/.config/cdd/cdd.json && cdd)", providerID, err)
+		}
+
+		// Update the provider config with the new token.
+		providerCfg.OAuthToken = newToken
+		providerCfg.SetupClaudeCode()
+
+		// Save the updated config to disk.
+		if err := config.Save(b.cfg); err != nil {
+			return fmt.Errorf("saving refreshed token: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // buildModel creates a Model from a selected model configuration.

@@ -78,10 +78,11 @@ func (s *StatusBar) View() string {
 		statusStyle = t.S().Error
 	}
 
+	// Don't set background color - let terminal use its native background
+	// to avoid polluting terminal state on exit
 	barStyle := lipgloss.NewStyle().
 		Width(s.width).
-		Padding(0, 1).
-		Background(t.BgSubtle)
+		Padding(0, 1)
 
 	help := t.S().Muted.Render("Enter to send • Ctrl+C to quit")
 

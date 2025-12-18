@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
 	"github.com/guilhermegouw/cdd/internal/agent"
+	"github.com/guilhermegouw/cdd/internal/debug"
 	"github.com/guilhermegouw/cdd/internal/tui/styles"
 )
 
@@ -50,27 +51,57 @@ func (m *MessageList) UpdateLast(content string) {
 
 // SetSize sets the component size.
 func (m *MessageList) SetSize(width, height int) {
+	// Skip if size hasn't changed
+	if m.ready && m.width == width && m.height == height {
+		return
+	}
+
 	m.width = width
 	m.height = height
 
 	if !m.ready {
+		debug.Event("messages", "SetSize", fmt.Sprintf("initializing viewport width=%d height=%d", width, height))
 		m.viewport = viewport.New(
 			viewport.WithWidth(width),
 			viewport.WithHeight(height),
 		)
 		m.viewport.MouseWheelEnabled = true
 		m.ready = true
+		debug.Event("messages", "SetSize", fmt.Sprintf("viewport initialized, mouseEnabled=%v", m.viewport.MouseWheelEnabled))
+		m.updateContent()
 	} else {
+		debug.Event("messages", "SetSize", fmt.Sprintf("resizing viewport width=%d height=%d", width, height))
 		m.viewport.SetWidth(width)
 		m.viewport.SetHeight(height)
+		// Don't call updateContent on resize - preserves scroll position
 	}
-	m.updateContent()
 }
 
 // Update handles viewport events.
 func (m *MessageList) Update(msg tea.Msg) (*MessageList, tea.Cmd) {
+	debug.Event("messages", "Update", fmt.Sprintf("msgType=%T ready=%v", msg, m.ready))
+
+	if !m.ready {
+		debug.Event("messages", "Update", "viewport not ready, skipping")
+		return m, nil
+	}
+
+	// Log viewport state before update
+	debug.Event("messages", "ViewportBefore", fmt.Sprintf(
+		"yOffset=%d totalLines=%d height=%d atBottom=%v mouseEnabled=%v",
+		m.viewport.YOffset(), m.viewport.TotalLineCount(), m.viewport.Height(),
+		m.viewport.AtBottom(), m.viewport.MouseWheelEnabled,
+	))
+
 	var cmd tea.Cmd
 	m.viewport, cmd = m.viewport.Update(msg)
+
+	// Log viewport state after update
+	debug.Event("messages", "ViewportAfter", fmt.Sprintf(
+		"yOffset=%d atBottom=%v",
+		m.viewport.YOffset(), m.viewport.AtBottom(),
+	))
+
 	return m, cmd
 }
 
@@ -102,6 +133,9 @@ func (m *MessageList) updateContent() {
 		return
 	}
 
+	// Check if we were at the bottom before updating
+	wasAtBottom := m.viewport.AtBottom()
+
 	// Render messages
 	var rendered []string
 	for _, msg := range m.messages {
@@ -119,8 +153,11 @@ func (m *MessageList) updateContent() {
 
 	m.viewport.SetContent(paddedContent)
 
-	// Auto-scroll to bottom when new content is added
-	m.viewport.GotoBottom()
+	// Only auto-scroll to bottom if we were already at the bottom
+	// This preserves scroll position when user is reading earlier content
+	if wasAtBottom {
+		m.viewport.GotoBottom()
+	}
 }
 
 func (m *MessageList) renderMessage(msg agent.Message) string {

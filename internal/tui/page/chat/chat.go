@@ -3,10 +3,12 @@ package chat
 
 import (
 	"context"
+	"fmt"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/guilhermegouw/cdd/internal/agent"
+	"github.com/guilhermegouw/cdd/internal/debug"
 	"github.com/guilhermegouw/cdd/internal/tui/styles"
 	"github.com/guilhermegouw/cdd/internal/tui/util"
 )
@@ -81,7 +83,16 @@ func (m *Model) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		debug.Event("chat", "KeyMsg", fmt.Sprintf("key=%q", msg.String()))
 		return m.handleKey(msg)
+
+	case tea.MouseWheelMsg:
+		debug.Event("chat", "MouseWheel", fmt.Sprintf("button=%v x=%d y=%d", msg.Button, msg.X, msg.Y))
+		// Route mouse wheel events to viewport
+		var cmd tea.Cmd
+		m.messages, cmd = m.messages.Update(msg)
+		debug.Event("chat", "MouseWheel", "routed to viewport")
+		return m, cmd
 
 	case StreamTextMsg:
 		if len(m.messages.messages) > 0 {
@@ -172,18 +183,26 @@ func (m *Model) handleKey(msg tea.KeyMsg) (util.Model, tea.Cmd) {
 			m.agent.Cancel(m.sessionID)
 			return m, nil
 		}
-
-	// Scroll keys - pass to message list viewport
-	case "up", "down", "pgup", "pgdown", "home", "end":
-		var cmd tea.Cmd
-		m.messages, cmd = m.messages.Update(msg)
-		return m, cmd
 	}
 
-	// Pass to input
-	var cmd tea.Cmd
-	m.input, cmd = m.input.Update(msg)
-	return m, cmd
+	// Pass key events to both viewport and input
+	var cmds []tea.Cmd
+
+	// Viewport handles scroll keys (up, down, pgup, pgdown, j, k, etc.)
+	var msgCmd tea.Cmd
+	m.messages, msgCmd = m.messages.Update(msg)
+	if msgCmd != nil {
+		cmds = append(cmds, msgCmd)
+	}
+
+	// Input handles typing
+	var inputCmd tea.Cmd
+	m.input, inputCmd = m.input.Update(msg)
+	if inputCmd != nil {
+		cmds = append(cmds, inputCmd)
+	}
+
+	return m, tea.Batch(cmds...)
 }
 
 func (m *Model) sendMessage(prompt string) tea.Cmd {

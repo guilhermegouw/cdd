@@ -5,15 +5,20 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
+	"github.com/adrg/xdg"
 	"github.com/spf13/cobra"
 
 	"github.com/guilhermegouw/cdd/internal/agent"
 	"github.com/guilhermegouw/cdd/internal/config"
+	"github.com/guilhermegouw/cdd/internal/debug"
 	"github.com/guilhermegouw/cdd/internal/provider"
 	"github.com/guilhermegouw/cdd/internal/tools"
 	"github.com/guilhermegouw/cdd/internal/tui"
 )
+
+var debugMode bool
 
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -29,6 +34,7 @@ It supports multiple phases of development:
 		RunE: runTUI,
 	}
 
+	cmd.Flags().BoolVar(&debugMode, "debug", false, "Enable debug logging to ~/.cdd/debug.log")
 	cmd.AddCommand(newVersionCmd())
 
 	return cmd
@@ -36,6 +42,17 @@ It supports multiple phases of development:
 
 // runTUI launches the terminal user interface.
 func runTUI(_ *cobra.Command, _ []string) error {
+	// Enable debug logging if requested.
+	if debugMode {
+		logPath := filepath.Join(xdg.DataHome, "cdd", "debug.log")
+		if err := debug.Enable(logPath); err != nil {
+			fmt.Printf("Warning: Failed to enable debug logging: %v\n", err)
+		} else {
+			defer debug.Disable()
+			fmt.Printf("Debug: %s\n", logPath)
+		}
+	}
+
 	// Check if this is first run.
 	isFirstRun := config.IsFirstRun()
 
@@ -66,7 +83,18 @@ func runTUI(_ *cobra.Command, _ []string) error {
 		}
 	}
 
-	return tui.Run(providers, isFirstRun, ag)
+	// Create an agent factory that reloads config and creates a new agent.
+	// This is called after the wizard completes to create the agent without restarting.
+	agentFactory := func() (*agent.DefaultAgent, error) {
+		// Reload config from disk (wizard just saved it).
+		newCfg, err := config.Load()
+		if err != nil {
+			return nil, fmt.Errorf("loading config: %w", err)
+		}
+		return createAgent(newCfg)
+	}
+
+	return tui.Run(providers, isFirstRun, ag, agentFactory)
 }
 
 // createAgent creates the agent with tools and model from configuration.
