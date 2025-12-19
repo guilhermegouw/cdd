@@ -103,7 +103,7 @@ func IsPathWithinDir(path, dir string) bool {
 }
 
 // FileRecord tracks when files were read/written.
-type FileRecord struct {
+type FileRecord struct { //nolint:govet // fieldalignment: preserving logical field order
 	Path      string
 	ReadTime  time.Time
 	WriteTime time.Time

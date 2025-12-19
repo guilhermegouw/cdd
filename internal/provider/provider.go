@@ -48,8 +48,8 @@ func NewBuilder(cfg *config.Config) *Builder {
 // BuildModels creates the large and small models from configuration.
 func (b *Builder) BuildModels(ctx context.Context) (large, small Model, err error) {
 	// Refresh any expired OAuth tokens before building models.
-	if err := b.refreshExpiredTokens(ctx); err != nil {
-		return Model{}, Model{}, fmt.Errorf("refreshing tokens: %w", err)
+	if refreshErr := b.refreshExpiredTokens(ctx); refreshErr != nil {
+		return Model{}, Model{}, fmt.Errorf("refreshing tokens: %w", refreshErr)
 	}
 
 	// Build large model.
@@ -97,6 +97,9 @@ func (b *Builder) refreshExpiredTokens(ctx context.Context) error {
 		// Update the provider config with the new token.
 		providerCfg.OAuthToken = newToken
 		providerCfg.SetupClaudeCode()
+
+		// Clear cached provider so it's rebuilt with new token.
+		delete(b.cache, providerID)
 
 		// Save the updated config to disk.
 		if err := config.Save(b.cfg); err != nil {

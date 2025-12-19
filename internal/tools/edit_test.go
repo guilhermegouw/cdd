@@ -29,7 +29,7 @@ func TestEditTool(t *testing.T) {
 		testFile := filepath.Join(tmpDir, "replace_single.txt")
 		originalContent := "Hello World"
 
-		if err := os.WriteFile(testFile, []byte(originalContent), 0644); err != nil {
+		if err := os.WriteFile(testFile, []byte(originalContent), 0o600); err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
 		RecordFileRead(testFile)
@@ -47,7 +47,7 @@ func TestEditTool(t *testing.T) {
 			t.Fatalf("Unexpected error response: %s", getTextContent(resp))
 		}
 
-		data, err := os.ReadFile(testFile)
+		data, err := os.ReadFile(testFile) //nolint:gosec // G304: Test file path is controlled
 		if err != nil {
 			t.Fatalf("Failed to read file: %v", err)
 		}
@@ -62,7 +62,7 @@ func TestEditTool(t *testing.T) {
 		testFile := filepath.Join(tmpDir, "replace_all.txt")
 		originalContent := "foo bar foo baz foo"
 
-		if err := os.WriteFile(testFile, []byte(originalContent), 0644); err != nil {
+		if err := os.WriteFile(testFile, []byte(originalContent), 0o600); err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
 		RecordFileRead(testFile)
@@ -81,7 +81,7 @@ func TestEditTool(t *testing.T) {
 			t.Fatalf("Unexpected error response: %s", getTextContent(resp))
 		}
 
-		data, err := os.ReadFile(testFile)
+		data, err := os.ReadFile(testFile) //nolint:gosec // G304: Test file path is controlled
 		if err != nil {
 			t.Fatalf("Failed to read file: %v", err)
 		}
@@ -96,7 +96,7 @@ func TestEditTool(t *testing.T) {
 		testFile := filepath.Join(tmpDir, "multiple.txt")
 		originalContent := "foo bar foo"
 
-		if err := os.WriteFile(testFile, []byte(originalContent), 0644); err != nil {
+		if err := os.WriteFile(testFile, []byte(originalContent), 0o600); err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
 		RecordFileRead(testFile)
@@ -138,7 +138,7 @@ func TestEditTool(t *testing.T) {
 			t.Fatalf("Unexpected error response: %s", getTextContent(resp))
 		}
 
-		data, err := os.ReadFile(testFile)
+		data, err := os.ReadFile(testFile) //nolint:gosec // G304: Test file path is controlled
 		if err != nil {
 			t.Fatalf("Failed to read file: %v", err)
 		}
@@ -153,7 +153,7 @@ func TestEditTool(t *testing.T) {
 		testFile := filepath.Join(tmpDir, "delete.txt")
 		originalContent := "Hello World"
 
-		if err := os.WriteFile(testFile, []byte(originalContent), 0644); err != nil {
+		if err := os.WriteFile(testFile, []byte(originalContent), 0o600); err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
 		RecordFileRead(testFile)
@@ -171,7 +171,7 @@ func TestEditTool(t *testing.T) {
 			t.Fatalf("Unexpected error response: %s", getTextContent(resp))
 		}
 
-		data, err := os.ReadFile(testFile)
+		data, err := os.ReadFile(testFile) //nolint:gosec // G304: Test file path is controlled
 		if err != nil {
 			t.Fatalf("Failed to read file: %v", err)
 		}
@@ -185,7 +185,7 @@ func TestEditTool(t *testing.T) {
 		ClearFileRecords()
 		testFile := filepath.Join(tmpDir, "not_read.txt")
 
-		if err := os.WriteFile(testFile, []byte("content"), 0644); err != nil {
+		if err := os.WriteFile(testFile, []byte("content"), 0o600); err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
 		// Intentionally NOT calling RecordFileRead
@@ -229,7 +229,7 @@ func TestEditTool(t *testing.T) {
 		ClearFileRecords()
 		testFile := filepath.Join(tmpDir, "no_match.txt")
 
-		if err := os.WriteFile(testFile, []byte("Hello World"), 0644); err != nil {
+		if err := os.WriteFile(testFile, []byte("Hello World"), 0o600); err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
 		RecordFileRead(testFile)

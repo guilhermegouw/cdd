@@ -44,7 +44,7 @@ func TestWriteTool(t *testing.T) {
 		}
 
 		// Verify file was created
-		data, err := os.ReadFile(testFile)
+		data, err := os.ReadFile(testFile) //nolint:gosec // G304: Test file path is controlled
 		if err != nil {
 			t.Fatalf("Failed to read created file: %v", err)
 		}
@@ -66,7 +66,7 @@ func TestWriteTool(t *testing.T) {
 		newContent := "New content"
 
 		// Create the file first
-		if err := os.WriteFile(testFile, []byte(originalContent), 0644); err != nil {
+		if err := os.WriteFile(testFile, []byte(originalContent), 0o600); err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
 
@@ -86,7 +86,7 @@ func TestWriteTool(t *testing.T) {
 		}
 
 		// Verify content was updated
-		data, err := os.ReadFile(testFile)
+		data, err := os.ReadFile(testFile) //nolint:gosec // G304: Test file path is controlled
 		if err != nil {
 			t.Fatalf("Failed to read file: %v", err)
 		}
@@ -142,7 +142,7 @@ func TestWriteTool(t *testing.T) {
 		}
 
 		// Verify file was created
-		data, err := os.ReadFile(testFile)
+		data, err := os.ReadFile(testFile) //nolint:gosec // G304: Test file path is controlled
 		if err != nil {
 			t.Fatalf("Failed to read nested file: %v", err)
 		}
@@ -155,7 +155,7 @@ func TestWriteTool(t *testing.T) {
 	t.Run("write to directory path fails", func(t *testing.T) {
 		ClearFileRecords()
 		dirPath := filepath.Join(tmpDir, "testdir")
-		if err := os.MkdirAll(dirPath, 0755); err != nil {
+		if err := os.MkdirAll(dirPath, 0o750); err != nil {
 			t.Fatalf("Failed to create test directory: %v", err)
 		}
 
@@ -183,7 +183,7 @@ func TestWriteTool(t *testing.T) {
 		content := "Same content"
 
 		// Create the file first
-		if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(testFile, []byte(content), 0o600); err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
 

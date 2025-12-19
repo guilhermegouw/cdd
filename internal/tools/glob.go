@@ -12,6 +12,7 @@ import (
 	"charm.land/fantasy"
 )
 
+// GlobToolName is the name of the glob tool.
 const GlobToolName = "glob"
 
 // GlobParams are the parameters for the glob tool.
@@ -96,13 +97,13 @@ type fileInfo struct {
 }
 
 //nolint:gocyclo // Complex file walking logic with multiple skip conditions
-func globFiles(ctx context.Context, pattern, searchPath string, limit int) ([]string, bool, error) {
+func globFiles(ctx context.Context, pattern, searchPath string, limit int) (files []string, truncated bool, err error) {
 	var matches []fileInfo
 
 	// Handle ** patterns
 	hasDoublestar := strings.Contains(pattern, "**")
 
-	err := filepath.Walk(searchPath, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(searchPath, func(path string, info os.FileInfo, walkErr error) error {
 		// Check context cancellation
 		select {
 		case <-ctx.Done():
@@ -110,7 +111,7 @@ func globFiles(ctx context.Context, pattern, searchPath string, limit int) ([]st
 		default:
 		}
 
-		if err != nil {
+		if walkErr != nil {
 			return nil //nolint:nilerr // Skip inaccessible files, continue walking
 		}
 
@@ -134,14 +135,14 @@ func globFiles(ctx context.Context, pattern, searchPath string, limit int) ([]st
 		}
 
 		// Get relative path for matching
-		relPath, err := filepath.Rel(searchPath, path)
-		if err != nil {
+		relPath, relErr := filepath.Rel(searchPath, path)
+		if relErr != nil {
 			return nil //nolint:nilerr // Skip files with path issues, continue walking
 		}
 
 		// Match the pattern
-		matched, err := matchGlob(pattern, relPath, hasDoublestar)
-		if err != nil || !matched {
+		matched, matchErr := matchGlob(pattern, relPath, hasDoublestar)
+		if matchErr != nil || !matched {
 			return nil //nolint:nilerr // Skip non-matching or error patterns, continue walking
 		}
 
@@ -168,7 +169,7 @@ func globFiles(ctx context.Context, pattern, searchPath string, limit int) ([]st
 	})
 
 	// Truncate to limit
-	truncated := len(matches) > limit
+	truncated = len(matches) > limit
 	if truncated {
 		matches = matches[:limit]
 	}

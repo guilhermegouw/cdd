@@ -17,6 +17,7 @@ import (
 	"charm.land/fantasy"
 )
 
+// Tool constants for grep operations.
 const (
 	GrepToolName        = "grep"
 	maxGrepContentWidth = 500
@@ -49,10 +50,10 @@ Usage:
 // grepMatch represents a single grep match.
 type grepMatch struct {
 	path     string
+	lineText string
 	modTime  int64
 	lineNum  int
 	charNum  int
-	lineText string
 }
 
 // regexCache provides thread-safe caching of compiled regex patterns.
@@ -260,7 +261,7 @@ func searchFiles(ctx context.Context, pattern, rootPath, include string, limit i
 	return matches, truncated, nil
 }
 
-func fileContainsPattern(filePath string, pattern *regexp.Regexp) (bool, int, int, string, error) {
+func fileContainsPattern(filePath string, pattern *regexp.Regexp) (found bool, lineNum, charNum int, lineText string, err error) {
 	file, err := os.Open(filePath) //nolint:gosec // G304: File path comes from directory walk
 	if err != nil {
 		return false, 0, 0, "", err
@@ -272,12 +273,12 @@ func fileContainsPattern(filePath string, pattern *regexp.Regexp) (bool, int, in
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, 1024*1024)
 
-	lineNum := 0
+	lineNum = 0
 	for scanner.Scan() {
 		lineNum++
 		line := scanner.Text()
 		if loc := pattern.FindStringIndex(line); loc != nil {
-			charNum := loc[0] + 1 // 1-based
+			charNum = loc[0] + 1 // 1-based
 			return true, lineNum, charNum, line, nil
 		}
 	}

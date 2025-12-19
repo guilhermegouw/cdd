@@ -16,13 +16,12 @@ import (
 const oauthSystemHeader = "You are Claude Code, Anthropic's official CLI for Claude."
 
 // DefaultAgent implements the Agent interface using Fantasy.
-type DefaultAgent struct {
-	model        fantasy.LanguageModel
-	systemPrompt string
-	tools        []fantasy.AgentTool
-	workingDir   string
-	sessions     *SessionStore
-
+type DefaultAgent struct { //nolint:govet // fieldalignment: preserving logical field order
+	model          fantasy.LanguageModel
+	systemPrompt   string
+	tools          []fantasy.AgentTool
+	workingDir     string
+	sessions       *SessionStore
 	activeRequests map[string]context.CancelFunc
 	mu             sync.RWMutex
 }
@@ -259,7 +258,7 @@ func (a *DefaultAgent) buildHistory(sessionID string) []fantasy.Message {
 				var output fantasy.ToolResultOutputContent
 				if tr.IsError {
 					output = fantasy.ToolResultOutputContentError{
-						Error: NewAgentError(tr.Content),
+						Error: NewError(tr.Content),
 					}
 				} else {
 					output = fantasy.ToolResultOutputContentText{

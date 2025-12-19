@@ -23,7 +23,7 @@ func TestReadTool(t *testing.T) {
 	// Create test files
 	testFile := filepath.Join(tmpDir, "test.txt")
 	testContent := "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"
-	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+	if err := os.WriteFile(testFile, []byte(testContent), 0o600); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -134,8 +134,8 @@ func TestReadToolLongLines(t *testing.T) {
 	// Create file with a very long line
 	longLine := strings.Repeat("x", MaxLineLength+100)
 	testFile := filepath.Join(tmpDir, "long.txt")
-	if err := os.WriteFile(testFile, []byte(longLine), 0644); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
+	if writeErr := os.WriteFile(testFile, []byte(longLine), 0o600); writeErr != nil {
+		t.Fatalf("Failed to create test file: %v", writeErr)
 	}
 
 	tool := NewReadTool(tmpDir)

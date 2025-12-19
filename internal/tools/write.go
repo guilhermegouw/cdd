@@ -11,6 +11,7 @@ import (
 	"charm.land/fantasy"
 )
 
+// WriteToolName is the name of the write tool.
 const WriteToolName = "write"
 
 // WriteParams are the parameters for the write tool.

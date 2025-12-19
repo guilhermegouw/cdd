@@ -8,7 +8,7 @@ import (
 )
 
 // Session represents a conversation session.
-type Session struct {
+type Session struct { //nolint:govet // fieldalignment: preserving logical field order
 	ID        string
 	Title     string
 	Messages  []Message

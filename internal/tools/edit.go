@@ -11,6 +11,7 @@ import (
 	"charm.land/fantasy"
 )
 
+// EditToolName is the name of the edit tool.
 const EditToolName = "edit"
 
 // EditParams are the parameters for the edit tool.

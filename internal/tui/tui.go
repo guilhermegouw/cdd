@@ -55,6 +55,7 @@ func New(providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent, 
 	// If we have an agent and it's not first run, go directly to chat.
 	if ag != nil && !isFirstRun {
 		m.chatPage = chat.New(ag)
+		m.chatPage.SetAgentFactory(chat.AgentFactory(factory))
 		m.currentPage = page.Chat
 	}
 
@@ -109,6 +110,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.agent != nil {
 			m.chatPage = chat.New(m.agent)
+			m.chatPage.SetAgentFactory(chat.AgentFactory(m.agentFactory))
 			m.chatPage.SetSize(m.width, m.height)
 			m.chatPage.SetProgram(m.program)
 			m.currentPage = page.Chat

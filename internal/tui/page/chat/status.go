@@ -9,6 +9,7 @@ import (
 // Status represents the current chat status.
 type Status int
 
+// Status constants for chat state.
 const (
 	StatusReady Status = iota
 	StatusThinking
@@ -18,10 +19,10 @@ const (
 
 // StatusBar displays the current chat status.
 type StatusBar struct {
-	status   Status
 	toolName string
 	errorMsg string
 	width    int
+	status   Status
 }
 
 // NewStatusBar creates a new status bar.

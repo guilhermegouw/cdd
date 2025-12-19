@@ -2,11 +2,13 @@
 package config
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
 
 	"github.com/guilhermegouw/cdd/internal/oauth"
+	"github.com/guilhermegouw/cdd/internal/oauth/claude"
 )
 
 const appName = "cdd"
@@ -149,4 +151,25 @@ func (c *Config) KnownProviders() []catwalk.Provider {
 // SetKnownProviders sets the catwalk provider metadata.
 func (c *Config) SetKnownProviders(providers []catwalk.Provider) {
 	c.knownProviders = providers
+}
+
+// RefreshOAuthToken refreshes the OAuth token for the given provider.
+// It updates the provider config with the new token and calls SetupClaudeCode.
+func (c *Config) RefreshOAuthToken(ctx context.Context, providerID string) error {
+	provider, ok := c.Providers[providerID]
+	if !ok {
+		return fmt.Errorf("provider %q not found", providerID)
+	}
+	if provider.OAuthToken == nil {
+		return fmt.Errorf("provider %q has no OAuth token", providerID)
+	}
+
+	newToken, err := claude.RefreshToken(ctx, provider.OAuthToken.RefreshToken)
+	if err != nil {
+		return fmt.Errorf("refreshing token for %q: %w", providerID, err)
+	}
+
+	provider.OAuthToken = newToken
+	provider.SetupClaudeCode()
+	return nil
 }

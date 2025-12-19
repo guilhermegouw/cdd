@@ -13,10 +13,12 @@ import (
 	"charm.land/fantasy"
 )
 
+// Tool constants for bash execution.
 const (
 	BashToolName    = "bash"
 	MaxOutputLength = 30000
 	DefaultTimeout  = 2 * time.Minute
+	osWindows       = "windows"
 )
 
 // BashParams are the parameters for the bash tool.
@@ -29,12 +31,12 @@ type BashParams struct {
 
 // BashResponseMetadata provides metadata about the bash execution.
 type BashResponseMetadata struct {
-	StartTime        int64  `json:"start_time"`
-	EndTime          int64  `json:"end_time"`
-	ExitCode         int    `json:"exit_code"`
 	Output           string `json:"output"`
 	Description      string `json:"description"`
 	WorkingDirectory string `json:"working_directory"`
+	StartTime        int64  `json:"start_time"`
+	EndTime          int64  `json:"end_time"`
+	ExitCode         int    `json:"exit_code"`
 }
 
 // bannedCommands lists commands that should not be executed.
@@ -107,9 +109,10 @@ func NewBashTool(workingDir string) fantasy.AgentTool {
 
 			// Execute command
 			var cmd *exec.Cmd
-			if runtime.GOOS == "windows" {
+			switch runtime.GOOS {
+			case osWindows:
 				cmd = exec.CommandContext(ctx, "cmd", "/c", params.Command) //nolint:gosec // G204: Command execution is the tool's purpose
-			} else {
+			default:
 				cmd = exec.CommandContext(ctx, "bash", "-c", params.Command) //nolint:gosec // G204: Command execution is the tool's purpose
 			}
 			cmd.Dir = execWorkingDir
@@ -124,12 +127,13 @@ func NewBashTool(workingDir string) fantasy.AgentTool {
 			exitCode := 0
 			if err != nil {
 				var exitErr *exec.ExitError
-				if errors.As(err, &exitErr) {
+				switch {
+				case errors.As(err, &exitErr):
 					exitCode = exitErr.ExitCode()
-				} else if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				case errors.Is(ctx.Err(), context.DeadlineExceeded):
 					return fantasy.NewTextErrorResponse(fmt.Sprintf(
 						"Command timed out after %v", timeout)), nil
-				} else if errors.Is(ctx.Err(), context.Canceled) {
+				case errors.Is(ctx.Err(), context.Canceled):
 					return fantasy.NewTextErrorResponse("Command was cancelled"), nil
 				}
 			}

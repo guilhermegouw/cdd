@@ -14,7 +14,7 @@ import (
 )
 
 // MessageList displays the conversation messages with scrolling support.
-type MessageList struct {
+type MessageList struct { //nolint:govet // fieldalignment: preserving logical field order
 	messages   []agent.Message
 	viewport   viewport.Model
 	mdRenderer *MarkdownRenderer
@@ -140,7 +140,7 @@ func (m *MessageList) updateContent() {
 	wasAtBottom := m.viewport.AtBottom()
 
 	// Render messages
-	var rendered []string
+	rendered := make([]string, 0, len(m.messages))
 	for _, msg := range m.messages {
 		rendered = append(rendered, m.renderMessage(msg))
 	}
@@ -197,7 +197,7 @@ func (m *MessageList) renderAssistantMessage(msg agent.Message, width int) strin
 
 	header := t.S().Primary.Bold(true).Render("Assistant")
 
-	var parts []string
+	parts := make([]string, 0, 3)
 	parts = append(parts, header)
 
 	if msg.Content != "" {
@@ -224,7 +224,7 @@ func (m *MessageList) renderAssistantMessage(msg agent.Message, width int) strin
 func (m *MessageList) renderToolMessage(msg agent.Message, width int) string {
 	t := styles.CurrentTheme()
 
-	var parts []string
+	parts := make([]string, 0, len(msg.ToolResults)*2)
 	for _, tr := range msg.ToolResults {
 		header := t.S().Muted.Render(fmt.Sprintf("  [Result: %s]", tr.Name))
 

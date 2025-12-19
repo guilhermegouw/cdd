@@ -19,9 +19,9 @@ func TestMarkdownRenderer_Render(t *testing.T) {
 	tests := []struct {
 		name     string
 		content  string
+		contains []string // Substrings that should be in output
 		width    int
 		wantErr  bool
-		contains []string // Substrings that should be in output
 	}{
 		{
 			name:    "empty content",

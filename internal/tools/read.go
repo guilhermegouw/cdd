@@ -12,6 +12,7 @@ import (
 	"charm.land/fantasy"
 )
 
+// Tool constants for read operations.
 const (
 	ReadToolName     = "read"
 	MaxReadSize      = 5 * 1024 * 1024 // 5MB
@@ -149,7 +150,7 @@ func addLineNumbers(content string, startLine int) string {
 	return strings.Join(result, "\n")
 }
 
-func readTextFile(filePath string, offset, limit int) (string, int, int, error) {
+func readTextFile(filePath string, offset, limit int) (content string, lineCount, totalLines int, err error) {
 	file, err := os.Open(filePath) //nolint:gosec // G304: File path is validated above
 	if err != nil {
 		return "", 0, 0, err
@@ -157,14 +158,14 @@ func readTextFile(filePath string, offset, limit int) (string, int, int, error) 
 	defer file.Close() //nolint:errcheck // Error on close for read-only file is ignorable
 
 	scanner := newLineScanner(file)
-	totalLines := 0
+	totalLines = 0
 
 	// Skip to offset
 	for totalLines < offset && scanner.Scan() {
 		totalLines++
 	}
-	if err := scanner.Err(); err != nil {
-		return "", 0, 0, err
+	if scanErr := scanner.Err(); scanErr != nil {
+		return "", 0, 0, scanErr
 	}
 
 	// Reset if we're starting from beginning
@@ -192,8 +193,8 @@ func readTextFile(filePath string, offset, limit int) (string, int, int, error) 
 		totalLines++
 	}
 
-	if err := scanner.Err(); err != nil {
-		return "", 0, 0, err
+	if scanErr := scanner.Err(); scanErr != nil {
+		return "", 0, 0, scanErr
 	}
 
 	return strings.Join(lines, "\n"), len(lines), totalLines, nil

@@ -3,9 +3,12 @@ package chat
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/fantasy"
 	"charm.land/lipgloss/v2"
 
 	"github.com/guilhermegouw/cdd/internal/agent"
@@ -40,17 +43,21 @@ type (
 	}
 )
 
+// AgentFactory creates a new agent (used for rebuilding after token refresh).
+type AgentFactory func() (*agent.DefaultAgent, error)
+
 // Model is the chat page model.
 type Model struct {
-	agent       *agent.DefaultAgent
-	messages    *MessageList
-	input       *Input
-	status      *StatusBar
-	program     *tea.Program
-	sessionID   string
-	isStreaming bool
-	width       int
-	height      int
+	agent        *agent.DefaultAgent
+	agentFactory AgentFactory
+	messages     *MessageList
+	input        *Input
+	status       *StatusBar
+	program      *tea.Program
+	sessionID    string
+	isStreaming  bool
+	width        int
+	height       int
 }
 
 // New creates a new chat page model.
@@ -66,6 +73,17 @@ func New(ag *agent.DefaultAgent) *Model {
 // SetProgram sets the tea.Program for sending messages.
 func (m *Model) SetProgram(p *tea.Program) {
 	m.program = p
+}
+
+// SetAgentFactory sets the factory for creating new agents (used after token refresh).
+func (m *Model) SetAgentFactory(factory AgentFactory) {
+	m.agentFactory = factory
+}
+
+// isUnauthorizedError checks if the error is a 401 Unauthorized response.
+func isUnauthorizedError(err error) bool {
+	var providerErr *fantasy.ProviderError
+	return errors.As(err, &providerErr) && providerErr.StatusCode == http.StatusUnauthorized
 }
 
 // Init initializes the chat page.
@@ -170,7 +188,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) (util.Model, tea.Cmd) {
 		})
 
 		// Send to agent
-		return m, m.sendMessage(value)
+		cmd := m.sendMessage(value)
+		return m, cmd
 
 	case "ctrl+c":
 		if m.isStreaming {
@@ -250,6 +269,25 @@ func (m *Model) sendMessage(prompt string) tea.Cmd {
 		}
 
 		err := m.agent.Send(ctx, prompt, opts, callbacks)
+
+		// Handle 401 errors by rebuilding agent and retrying once.
+		if err != nil && isUnauthorizedError(err) && m.agentFactory != nil {
+			debug.Event("chat", "TokenRefresh", "401 error, attempting to rebuild agent")
+
+			// Try to rebuild the agent with fresh tokens.
+			newAgent, factoryErr := m.agentFactory()
+			if factoryErr != nil {
+				debug.Error("chat", factoryErr, "failed to rebuild agent after 401")
+				return StreamErrorMsg{Error: fmt.Errorf("session expired, please restart: %w", err)}
+			}
+
+			// Update agent reference and retry.
+			m.agent = newAgent
+			streamedContent = "" // Reset streamed content for retry
+
+			err = m.agent.Send(ctx, prompt, opts, callbacks)
+		}
+
 		if err != nil {
 			return StreamErrorMsg{Error: err}
 		}

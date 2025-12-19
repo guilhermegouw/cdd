@@ -11,6 +11,7 @@ import (
 // Role represents the role of a message.
 type Role string
 
+// Role constants for message roles.
 const (
 	RoleUser      Role = "user"
 	RoleAssistant Role = "assistant"
@@ -19,13 +20,13 @@ const (
 )
 
 // Message represents a conversation message.
-type Message struct {
+type Message struct { //nolint:govet // fieldalignment: preserving logical field order
 	ID          string
-	Role        Role
 	Content     string
 	ToolCalls   []ToolCall
 	ToolResults []ToolResult
 	CreatedAt   time.Time
+	Role        Role
 }
 
 // ToolCall represents a tool call made by the assistant.
@@ -53,10 +54,10 @@ type StreamCallbacks struct {
 }
 
 // SendOptions contains options for sending a message.
-type SendOptions struct {
+type SendOptions struct { //nolint:govet // fieldalignment: preserving logical field order
 	SessionID   string
-	MaxTokens   int64
 	Temperature *float64
+	MaxTokens   int64
 }
 
 // Agent is the interface for an AI agent.
@@ -84,7 +85,7 @@ type Agent interface {
 }
 
 // Config contains agent configuration.
-type Config struct {
+type Config struct { //nolint:govet // fieldalignment: preserving logical field order
 	Model        fantasy.LanguageModel
 	SystemPrompt string
 	Tools        []fantasy.AgentTool
@@ -92,20 +93,21 @@ type Config struct {
 }
 
 // ErrSessionBusy is returned when a session is already processing a request.
-var ErrSessionBusy = NewAgentError("session is busy")
+var ErrSessionBusy = NewError("session is busy")
 
 // ErrEmptyPrompt is returned when an empty prompt is provided.
-var ErrEmptyPrompt = NewAgentError("prompt cannot be empty")
+var ErrEmptyPrompt = NewError("prompt cannot be empty")
 
-// AgentError represents an agent-specific error.
-type AgentError struct {
+// Error represents an agent-specific error.
+type Error struct {
 	message string
 }
 
-func NewAgentError(message string) *AgentError {
-	return &AgentError{message: message}
+// NewError creates a new agent error with the given message.
+func NewError(message string) *Error {
+	return &Error{message: message}
 }
 
-func (e *AgentError) Error() string {
+func (e *Error) Error() string {
 	return e.message
 }
