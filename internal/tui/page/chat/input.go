@@ -1,7 +1,8 @@
 package chat
 
 import (
-	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
@@ -10,27 +11,43 @@ import (
 
 // Input is the chat input component.
 type Input struct {
-	textInput textinput.Model
-	width     int
-	enabled   bool
+	textArea textarea.Model
+	width    int
+	enabled  bool
 }
 
 // NewInput creates a new input component.
 func NewInput() *Input {
-	ti := textinput.New()
-	ti.Placeholder = "Type a message..."
-	ti.CharLimit = 4096
-	ti.Focus()
+	ta := textarea.New()
+	ta.Placeholder = "Type a message... (ctrl+j for newline)"
+	ta.CharLimit = 4096
+	ta.MaxHeight = 5           // Allow up to 5 lines
+	ta.SetHeight(1)            // Start with single line
+	ta.ShowLineNumbers = false
+	ta.Focus()
+
+	// Remove cursor line highlight
+	styles := ta.Styles()
+	styles.Focused.CursorLine = lipgloss.NewStyle()
+	styles.Blurred.CursorLine = lipgloss.NewStyle()
+	ta.SetStyles(styles)
+
+	// Customize key bindings: Enter should NOT insert newline (we handle submit externally)
+	// ctrl+j will insert newline
+	ta.KeyMap.InsertNewline = key.NewBinding(
+		key.WithKeys("ctrl+j"),
+		key.WithHelp("ctrl+j", "new line"),
+	)
 
 	return &Input{
-		textInput: ti,
-		enabled:   true,
+		textArea: ta,
+		enabled:  true,
 	}
 }
 
 // Init initializes the input.
 func (i *Input) Init() tea.Cmd {
-	return textinput.Blink
+	return textarea.Blink
 }
 
 // Update handles input events.
@@ -40,7 +57,18 @@ func (i *Input) Update(msg tea.Msg) (*Input, tea.Cmd) {
 	}
 
 	var cmd tea.Cmd
-	i.textInput, cmd = i.textInput.Update(msg)
+	i.textArea, cmd = i.textArea.Update(msg)
+
+	// Auto-resize height based on content (max 5 lines)
+	lines := i.textArea.LineCount()
+	if lines < 1 {
+		lines = 1
+	}
+	if lines > 5 {
+		lines = 5
+	}
+	i.textArea.SetHeight(lines)
+
 	return i, cmd
 }
 
@@ -64,45 +92,46 @@ func (i *Input) View() string {
 		inputStyle = inputStyle.BorderForeground(t.Border)
 	}
 
-	return inputStyle.Render(i.textInput.View())
+	return inputStyle.Render(i.textArea.View())
 }
 
 // SetWidth sets the input width.
 func (i *Input) SetWidth(width int) {
 	i.width = width
-	// Ensure textinput width is never negative
+	// Ensure textarea width is never negative
 	inputWidth := width - 8 // Account for border and padding
 	if inputWidth < 1 {
 		inputWidth = 1
 	}
-	i.textInput.SetWidth(inputWidth)
+	i.textArea.SetWidth(inputWidth)
 }
 
 // Value returns the current input value.
 func (i *Input) Value() string {
-	return i.textInput.Value()
+	return i.textArea.Value()
 }
 
 // SetValue sets the input value.
 func (i *Input) SetValue(value string) {
-	i.textInput.SetValue(value)
+	i.textArea.SetValue(value)
 }
 
 // Clear clears the input.
 func (i *Input) Clear() {
-	i.textInput.SetValue("")
+	i.textArea.SetValue("")
+	i.textArea.SetHeight(1)
 }
 
 // Enable enables the input.
 func (i *Input) Enable() {
 	i.enabled = true
-	i.textInput.Focus()
+	i.textArea.Focus()
 }
 
 // Disable disables the input.
 func (i *Input) Disable() {
 	i.enabled = false
-	i.textInput.Blur()
+	i.textArea.Blur()
 }
 
 // IsEnabled returns whether the input is enabled.
@@ -112,15 +141,15 @@ func (i *Input) IsEnabled() bool {
 
 // Focus focuses the input.
 func (i *Input) Focus() tea.Cmd {
-	return i.textInput.Focus()
+	return i.textArea.Focus()
 }
 
 // Blur removes focus from the input.
 func (i *Input) Blur() {
-	i.textInput.Blur()
+	i.textArea.Blur()
 }
 
 // Cursor returns the cursor for the input.
 func (i *Input) Cursor() *tea.Cursor {
-	return i.textInput.Cursor()
+	return i.textArea.Cursor()
 }
