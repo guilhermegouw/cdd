@@ -10,12 +10,14 @@ import (
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
 )
 
+const testOpenAIProviderID = "openai"
+
 func TestProvidersCache_Struct(t *testing.T) {
 	now := time.Now()
 	cache := ProvidersCache{
 		UpdatedAt: now,
 		Providers: []catwalk.Provider{
-			{ID: "openai", Name: "OpenAI"},
+			{ID: testOpenAIProviderID, Name: "OpenAI"},
 		},
 	}
 
@@ -25,8 +27,8 @@ func TestProvidersCache_Struct(t *testing.T) {
 	if len(cache.Providers) != 1 {
 		t.Errorf("Providers length = %d, want 1", len(cache.Providers))
 	}
-	if cache.Providers[0].ID != "openai" {
-		t.Errorf("Providers[0].ID = %q, want %q", cache.Providers[0].ID, "openai")
+	if cache.Providers[0].ID != testOpenAIProviderID {
+		t.Errorf("Providers[0].ID = %q, want %q", cache.Providers[0].ID, testOpenAIProviderID)
 	}
 }
 
@@ -38,7 +40,7 @@ func TestLoadProvidersCache(t *testing.T) {
 	cache := ProvidersCache{
 		UpdatedAt: time.Now(),
 		Providers: []catwalk.Provider{
-			{ID: "openai", Name: "OpenAI"},
+			{ID: testOpenAIProviderID, Name: "OpenAI"},
 			{ID: "anthropic", Name: "Anthropic"},
 		},
 	}
@@ -59,8 +61,8 @@ func TestLoadProvidersCache(t *testing.T) {
 	if len(loaded.Providers) != 2 {
 		t.Errorf("Providers length = %d, want 2", len(loaded.Providers))
 	}
-	if loaded.Providers[0].ID != "openai" {
-		t.Errorf("Providers[0].ID = %q, want %q", loaded.Providers[0].ID, "openai")
+	if loaded.Providers[0].ID != testOpenAIProviderID {
+		t.Errorf("Providers[0].ID = %q, want %q", loaded.Providers[0].ID, testOpenAIProviderID)
 	}
 }
 
@@ -91,7 +93,7 @@ func TestSaveProvidersCache(t *testing.T) {
 	cachePath := filepath.Join(tempDir, "subdir", "providers.json")
 
 	providers := []catwalk.Provider{
-		{ID: "openai", Name: "OpenAI"},
+		{ID: testOpenAIProviderID, Name: "OpenAI"},
 	}
 
 	err := saveProvidersCache(cachePath, providers)
@@ -112,8 +114,8 @@ func TestSaveProvidersCache(t *testing.T) {
 	if len(loaded.Providers) != 1 {
 		t.Errorf("Providers length = %d, want 1", len(loaded.Providers))
 	}
-	if loaded.Providers[0].ID != "openai" {
-		t.Errorf("Providers[0].ID = %q, want %q", loaded.Providers[0].ID, "openai")
+	if loaded.Providers[0].ID != testOpenAIProviderID {
+		t.Errorf("Providers[0].ID = %q, want %q", loaded.Providers[0].ID, testOpenAIProviderID)
 	}
 	if loaded.UpdatedAt.IsZero() {
 		t.Error("UpdatedAt is zero")
@@ -333,7 +335,7 @@ func TestLoadProviders_StaleCache(t *testing.T) {
 	// Embedded providers should have standard providers like openai, anthropic.
 	hasStandardProvider := false
 	for _, p := range providers {
-		if p.ID == "openai" || p.ID == "anthropic" {
+		if p.ID == testOpenAIProviderID || p.ID == "anthropic" {
 			hasStandardProvider = true
 			break
 		}
@@ -353,7 +355,7 @@ func TestProvidersCache_JSONMarshaling(t *testing.T) {
 	original := ProvidersCache{
 		UpdatedAt: time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC),
 		Providers: []catwalk.Provider{
-			{ID: "openai", Name: "OpenAI", Type: catwalk.TypeOpenAI},
+			{ID: testOpenAIProviderID, Name: "OpenAI", Type: catwalk.TypeOpenAI},
 		},
 	}
 

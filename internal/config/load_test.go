@@ -8,6 +8,11 @@ import (
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
 )
 
+const (
+	testModelGPT4o = "gpt-4o"
+	testProviderID = "openai"
+)
+
 func TestLoadFile(t *testing.T) {
 	// Create a temporary config file.
 	tempDir := t.TempDir()
@@ -41,19 +46,19 @@ func TestLoadFile(t *testing.T) {
 	}
 
 	// Verify models.
-	if cfg.Models[SelectedModelTypeLarge].Model != "gpt-4o" {
-		t.Errorf("Large model = %q, want %q", cfg.Models[SelectedModelTypeLarge].Model, "gpt-4o")
+	if cfg.Models[SelectedModelTypeLarge].Model != testModelGPT4o {
+		t.Errorf("Large model = %q, want %q", cfg.Models[SelectedModelTypeLarge].Model, testModelGPT4o)
 	}
 	if cfg.Models[SelectedModelTypeSmall].Model != "gpt-4o-mini" {
 		t.Errorf("Small model = %q, want %q", cfg.Models[SelectedModelTypeSmall].Model, "gpt-4o-mini")
 	}
 
 	// Verify provider.
-	if cfg.Providers["openai"] == nil {
+	if cfg.Providers[testProviderID] == nil {
 		t.Fatal("Provider 'openai' not loaded")
 	}
-	if cfg.Providers["openai"].APIKey != "$OPENAI_API_KEY" {
-		t.Errorf("APIKey = %q, want %q", cfg.Providers["openai"].APIKey, "$OPENAI_API_KEY")
+	if cfg.Providers[testProviderID].APIKey != "$OPENAI_API_KEY" {
+		t.Errorf("APIKey = %q, want %q", cfg.Providers[testProviderID].APIKey, "$OPENAI_API_KEY")
 	}
 
 	// Verify options.
@@ -177,18 +182,18 @@ func TestConfigureProviders(t *testing.T) {
 	t.Setenv("TEST_API_KEY", "resolved-key")
 
 	cfg := NewConfig()
-	cfg.Providers["openai"] = &ProviderConfig{
+	cfg.Providers[testProviderID] = &ProviderConfig{
 		APIKey: "$TEST_API_KEY",
 	}
 
 	providers := []catwalk.Provider{
 		{
-			ID:          "openai",
+			ID:          testProviderID,
 			Name:        "OpenAI",
 			Type:        catwalk.TypeOpenAI,
 			APIEndpoint: "https://api.openai.com/v1",
 			Models: []catwalk.Model{
-				{ID: "gpt-4o"},
+				{ID: testModelGPT4o},
 			},
 		},
 	}
@@ -197,7 +202,7 @@ func TestConfigureProviders(t *testing.T) {
 	resolver := NewResolver()
 	configureProviders(cfg, resolver)
 
-	provider := cfg.Providers["openai"]
+	provider := cfg.Providers[testProviderID]
 	if provider == nil {
 		t.Fatal("Provider 'openai' is nil")
 	}
@@ -208,8 +213,8 @@ func TestConfigureProviders(t *testing.T) {
 	}
 
 	// ID should be set from catwalk.
-	if provider.ID != "openai" {
-		t.Errorf("ID = %q, want %q", provider.ID, "openai")
+	if provider.ID != testProviderID {
+		t.Errorf("ID = %q, want %q", provider.ID, testProviderID)
 	}
 
 	// Name should be set from catwalk.
@@ -240,12 +245,12 @@ func TestConfigureProviders(t *testing.T) {
 
 func TestConfigureProviders_UnresolvedAPIKey(t *testing.T) {
 	cfg := NewConfig()
-	cfg.Providers["openai"] = &ProviderConfig{
+	cfg.Providers[testProviderID] = &ProviderConfig{
 		APIKey: "$UNDEFINED_API_KEY",
 	}
 
 	providers := []catwalk.Provider{
-		{ID: "openai", Name: "OpenAI"},
+		{ID: testProviderID, Name: "OpenAI"},
 	}
 	cfg.SetKnownProviders(providers)
 
@@ -253,7 +258,7 @@ func TestConfigureProviders_UnresolvedAPIKey(t *testing.T) {
 	configureProviders(cfg, resolver)
 
 	// Provider should be removed due to unresolved API key.
-	if cfg.Providers["openai"] != nil {
+	if cfg.Providers[testProviderID] != nil {
 		t.Error("Provider 'openai' should be removed due to unresolved API key")
 	}
 }
@@ -263,13 +268,13 @@ func TestConfigureProviders_CustomBaseURL(t *testing.T) {
 	t.Setenv("CUSTOM_URL", "https://custom.api.com")
 
 	cfg := NewConfig()
-	cfg.Providers["openai"] = &ProviderConfig{
+	cfg.Providers[testProviderID] = &ProviderConfig{
 		APIKey:  "$TEST_KEY",
 		BaseURL: "$CUSTOM_URL",
 	}
 
 	providers := []catwalk.Provider{
-		{ID: "openai", APIEndpoint: "https://default.api.com"},
+		{ID: testProviderID, APIEndpoint: "https://default.api.com"},
 	}
 	cfg.SetKnownProviders(providers)
 
@@ -277,8 +282,8 @@ func TestConfigureProviders_CustomBaseURL(t *testing.T) {
 	configureProviders(cfg, resolver)
 
 	// Custom URL should be preserved.
-	if cfg.Providers["openai"].BaseURL != "https://custom.api.com" {
-		t.Errorf("BaseURL = %q, want %q", cfg.Providers["openai"].BaseURL, "https://custom.api.com")
+	if cfg.Providers[testProviderID].BaseURL != "https://custom.api.com" {
+		t.Errorf("BaseURL = %q, want %q", cfg.Providers[testProviderID].BaseURL, "https://custom.api.com")
 	}
 }
 
@@ -286,7 +291,7 @@ func TestConfigureProviders_MergeModels(t *testing.T) {
 	t.Setenv("TEST_KEY", "key")
 
 	cfg := NewConfig()
-	cfg.Providers["openai"] = &ProviderConfig{
+	cfg.Providers[testProviderID] = &ProviderConfig{
 		APIKey: "$TEST_KEY",
 		Models: []catwalk.Model{
 			{ID: "custom-model", Name: "Custom"},
@@ -295,9 +300,9 @@ func TestConfigureProviders_MergeModels(t *testing.T) {
 
 	providers := []catwalk.Provider{
 		{
-			ID: "openai",
+			ID: testProviderID,
 			Models: []catwalk.Model{
-				{ID: "gpt-4o", Name: "GPT-4o"},
+				{ID: testModelGPT4o, Name: "GPT-4o"},
 				{ID: "custom-model", Name: "Default Custom"}, // Same ID, should not duplicate.
 			},
 		},
@@ -308,13 +313,13 @@ func TestConfigureProviders_MergeModels(t *testing.T) {
 	configureProviders(cfg, resolver)
 
 	// Should have 2 models (custom + gpt-4o, no duplicate).
-	if len(cfg.Providers["openai"].Models) != 2 {
-		t.Errorf("Models length = %d, want 2", len(cfg.Providers["openai"].Models))
+	if len(cfg.Providers[testProviderID].Models) != 2 {
+		t.Errorf("Models length = %d, want 2", len(cfg.Providers[testProviderID].Models))
 	}
 
 	// Custom model should keep user's name.
 	found := false
-	for _, m := range cfg.Providers["openai"].Models {
+	for _, m := range cfg.Providers[testProviderID].Models {
 		if m.ID == "custom-model" && m.Name == "Custom" {
 			found = true
 			break
@@ -381,7 +386,7 @@ func TestConfigureDefaultModels_NoValidProviders(t *testing.T) {
 	// No providers configured.
 
 	providers := []catwalk.Provider{
-		{ID: "openai", DefaultLargeModelID: "gpt-4o"},
+		{ID: testProviderID, DefaultLargeModelID: testModelGPT4o},
 	}
 	cfg.SetKnownProviders(providers)
 
@@ -393,14 +398,14 @@ func TestConfigureDefaultModels_NoValidProviders(t *testing.T) {
 
 func TestConfigureDefaultModels_DisabledProvider(t *testing.T) {
 	cfg := NewConfig()
-	cfg.Providers["openai"] = &ProviderConfig{
-		ID:      "openai",
+	cfg.Providers[testProviderID] = &ProviderConfig{
+		ID:      testProviderID,
 		APIKey:  "key",
 		Disable: true,
 	}
 
 	providers := []catwalk.Provider{
-		{ID: "openai", DefaultLargeModelID: "gpt-4o"},
+		{ID: testProviderID, DefaultLargeModelID: testModelGPT4o},
 	}
 	cfg.SetKnownProviders(providers)
 
@@ -412,13 +417,13 @@ func TestConfigureDefaultModels_DisabledProvider(t *testing.T) {
 
 func TestConfigureDefaultModels_NoAPIKey(t *testing.T) {
 	cfg := NewConfig()
-	cfg.Providers["openai"] = &ProviderConfig{
-		ID:     "openai",
+	cfg.Providers[testProviderID] = &ProviderConfig{
+		ID:     testProviderID,
 		APIKey: "", // No API key.
 	}
 
 	providers := []catwalk.Provider{
-		{ID: "openai", DefaultLargeModelID: "gpt-4o"},
+		{ID: testProviderID, DefaultLargeModelID: testModelGPT4o},
 	}
 	cfg.SetKnownProviders(providers)
 
@@ -430,8 +435,8 @@ func TestConfigureDefaultModels_NoAPIKey(t *testing.T) {
 
 func TestValidateModels(t *testing.T) {
 	cfg := NewConfig()
-	cfg.Providers["openai"] = &ProviderConfig{ID: "openai"}
-	cfg.Models[SelectedModelTypeLarge] = SelectedModel{Model: "gpt-4o", Provider: "openai"}
+	cfg.Providers[testProviderID] = &ProviderConfig{ID: testProviderID}
+	cfg.Models[SelectedModelTypeLarge] = SelectedModel{Model: testModelGPT4o, Provider: testProviderID}
 
 	err := validateModels(cfg)
 	if err != nil {
@@ -441,7 +446,7 @@ func TestValidateModels(t *testing.T) {
 
 func TestValidateModels_UnknownProvider(t *testing.T) {
 	cfg := NewConfig()
-	cfg.Models[SelectedModelTypeLarge] = SelectedModel{Model: "gpt-4o", Provider: "unknown"}
+	cfg.Models[SelectedModelTypeLarge] = SelectedModel{Model: testModelGPT4o, Provider: "unknown"}
 
 	err := validateModels(cfg)
 	if err == nil {
@@ -451,8 +456,8 @@ func TestValidateModels_UnknownProvider(t *testing.T) {
 
 func TestValidateModels_DisabledProvider(t *testing.T) {
 	cfg := NewConfig()
-	cfg.Providers["openai"] = &ProviderConfig{ID: "openai", Disable: true}
-	cfg.Models[SelectedModelTypeLarge] = SelectedModel{Model: "gpt-4o", Provider: "openai"}
+	cfg.Providers[testProviderID] = &ProviderConfig{ID: testProviderID, Disable: true}
+	cfg.Models[SelectedModelTypeLarge] = SelectedModel{Model: testModelGPT4o, Provider: testProviderID}
 
 	err := validateModels(cfg)
 	if err == nil {
@@ -619,11 +624,11 @@ func TestLoadFromFile(t *testing.T) {
 		t.Fatalf("LoadFromFile() error = %v", err)
 	}
 
-	if cfg.Providers["openai"] == nil {
+	if cfg.Providers[testProviderID] == nil {
 		t.Fatal("Provider 'openai' not loaded")
 	}
-	if cfg.Providers["openai"].APIKey != "sk-test-key" {
-		t.Errorf("APIKey not resolved, got %q", cfg.Providers["openai"].APIKey)
+	if cfg.Providers[testProviderID].APIKey != "sk-test-key" {
+		t.Errorf("APIKey not resolved, got %q", cfg.Providers[testProviderID].APIKey)
 	}
 }
 

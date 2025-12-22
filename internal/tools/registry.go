@@ -1,10 +1,11 @@
+// Package tools provides tool definitions and registry for the agent.
 package tools
 
 import (
 	"charm.land/fantasy"
 )
 
-// ToolMetadata provides additional information about a tool.
+// ToolMetadata holds metadata about a tool.
 type ToolMetadata struct {
 	Name        string
 	Category    string
@@ -12,13 +13,13 @@ type ToolMetadata struct {
 	Safe        bool // Safe tools don't modify files or execute commands
 }
 
-// Registry manages agent tools.
+// Registry manages a collection of agent tools.
 type Registry struct {
 	tools    map[string]fantasy.AgentTool
 	metadata map[string]ToolMetadata
 }
 
-// NewRegistry creates a new tool registry.
+// NewRegistry creates a new empty tool registry.
 func NewRegistry() *Registry {
 	return &Registry{
 		tools:    make(map[string]fantasy.AgentTool),
@@ -26,13 +27,13 @@ func NewRegistry() *Registry {
 	}
 }
 
-// Register adds a tool to the registry.
+// Register adds a tool to the registry with its metadata.
 func (r *Registry) Register(tool fantasy.AgentTool, meta ToolMetadata) {
 	r.tools[meta.Name] = tool
 	r.metadata[meta.Name] = meta
 }
 
-// Get returns a tool by name.
+// Get retrieves a tool by name.
 func (r *Registry) Get(name string) (fantasy.AgentTool, bool) {
 	tool, ok := r.tools[name]
 	return tool, ok
@@ -47,7 +48,7 @@ func (r *Registry) All() []fantasy.AgentTool {
 	return tools
 }
 
-// Filter returns tools by name.
+// Filter returns tools matching the given names.
 func (r *Registry) Filter(names []string) []fantasy.AgentTool {
 	tools := make([]fantasy.AgentTool, 0, len(names))
 	for _, name := range names {
@@ -58,7 +59,7 @@ func (r *Registry) Filter(names []string) []fantasy.AgentTool {
 	return tools
 }
 
-// SafeTools returns only tools marked as safe.
+// SafeTools returns all tools marked as safe.
 func (r *Registry) SafeTools() []fantasy.AgentTool {
 	tools := make([]fantasy.AgentTool, 0)
 	for name, tool := range r.tools {
@@ -69,13 +70,13 @@ func (r *Registry) SafeTools() []fantasy.AgentTool {
 	return tools
 }
 
-// Metadata returns metadata for a tool.
+// Metadata returns the metadata for a tool by name.
 func (r *Registry) Metadata(name string) (ToolMetadata, bool) {
 	meta, ok := r.metadata[name]
 	return meta, ok
 }
 
-// Names returns all tool names.
+// Names returns the names of all registered tools.
 func (r *Registry) Names() []string {
 	names := make([]string, 0, len(r.tools))
 	for name := range r.tools {
@@ -84,11 +85,10 @@ func (r *Registry) Names() []string {
 	return names
 }
 
-// DefaultRegistry creates a registry with all default tools.
+// DefaultRegistry creates a registry with the default set of tools.
 func DefaultRegistry(workingDir string) *Registry {
 	r := NewRegistry()
 
-	// Register read-only tools
 	r.Register(NewReadTool(workingDir), ToolMetadata{
 		Name:        ReadToolName,
 		Category:    "file",
@@ -110,7 +110,6 @@ func DefaultRegistry(workingDir string) *Registry {
 		Safe:        true,
 	})
 
-	// Register write tools
 	r.Register(NewWriteTool(workingDir), ToolMetadata{
 		Name:        WriteToolName,
 		Category:    "file",

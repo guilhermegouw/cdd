@@ -40,11 +40,14 @@ It supports multiple phases of development:
 
 func runTUI(cmd *cobra.Command, _ []string) error {
 	// Enable debug logging if requested.
-	debugMode, _ := cmd.Flags().GetBool("debug")
+	debugMode, err := cmd.Flags().GetBool("debug")
+	if err != nil {
+		return fmt.Errorf("getting debug flag: %w", err)
+	}
 	if debugMode {
 		logPath := filepath.Join(xdg.DataHome, "cdd", "debug.log")
-		if err := debug.Enable(logPath); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Failed to enable debug logging: %v\n", err)
+		if debugErr := debug.Enable(logPath); debugErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Failed to enable debug logging: %v\n", debugErr)
 		} else {
 			defer debug.Disable()
 			fmt.Fprintf(os.Stderr, "Debug: %s\n", logPath)
@@ -117,6 +120,7 @@ func createAgent(cfg *config.Config) (*agent.DefaultAgent, error) {
 	return agent.New(agentCfg), nil
 }
 
+// Execute runs the root command.
 func Execute() error {
 	return newRootCmd().Execute()
 }
