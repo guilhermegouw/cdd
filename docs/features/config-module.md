@@ -7,7 +7,7 @@ The config module provides configuration management for CDD CLI. It handles load
 | Aspect | Details |
 |--------|---------|
 | Location | `internal/config/` |
-| Files | 6 source files (~900 lines total) |
+| Files | 6 source files + 6 test files (~3000 lines total) |
 | Purpose | Configuration management |
 | Config Format | JSON |
 
@@ -15,12 +15,18 @@ The config module provides configuration management for CDD CLI. It handles load
 
 ```
 internal/config/
-├── config.go      - Core types: Config, ProviderConfig, SelectedModel
-├── load.go        - Load and merge config from files
-├── save.go        - Save config to disk
-├── firstrun.go    - Detect first run / needs setup
-├── providers.go   - Fetch/cache provider metadata
-└── resolve.go     - Resolve $ENV_VAR in config values
+├── config.go          - Core types: Config, ProviderConfig, SelectedModel
+├── config_test.go     - Tests for config types
+├── load.go            - Load and merge config from files
+├── load_test.go       - Tests for config loading
+├── save.go            - Save config to disk
+├── save_test.go       - Tests for config saving
+├── firstrun.go        - Detect first run / needs setup
+├── firstrun_test.go   - Tests for first run detection
+├── providers.go       - Fetch/cache provider metadata
+├── providers_test.go  - Tests for provider loading
+├── resolve.go         - Resolve $ENV_VAR in config values
+└── resolve_test.go    - Tests for environment resolution
 ```
 
 ## Data Types
