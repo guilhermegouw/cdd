@@ -56,12 +56,13 @@ The TUI launches automatically on the `cdd` command and shows the setup wizard o
 The TUI uses a page-based navigation system:
 
 ```go
-type ID int
+type ID string
 
 const (
-    Welcome ID = iota  // Welcome/splash screen
-    Wizard             // Setup wizard
-    Main               // Main application (future)
+    Welcome ID = "welcome"  // Welcome/splash screen
+    Wizard  ID = "wizard"   // Setup wizard
+    Main    ID = "main"     // Main application (future)
+    Chat    ID = "chat"     // Chat interface
 )
 ```
 
@@ -79,13 +80,17 @@ type ChangeMsg struct {
 TUI Model
 ├── Welcome Screen
 │   └── Logo Component
-└── Wizard
-    ├── ProviderList
-    ├── AuthMethodChooser (Anthropic only)
-    ├── OAuth2Flow
-    ├── APIKeyInput
-    ├── ModelList (Large)
-    └── ModelList (Small)
+├── Wizard
+│   ├── ProviderList
+│   ├── AuthMethodChooser (Anthropic only)
+│   ├── OAuth2Flow
+│   ├── APIKeyInput
+│   ├── ModelList (Large)
+│   └── ModelList (Small)
+└── Chat Page
+    ├── Message List
+    ├── Input Component
+    └── Markdown Renderer
 ```
 
 ### Message Flow
@@ -323,30 +328,32 @@ Press any key to continue...
 
 **Implementation**: `internal/tui/styles/`
 
-### CDD Theme
+### Default Theme
 
-**Implementation**: `internal/tui/styles/cdd.go`
+**Implementation**: `internal/tui/styles/default.go`
 
-Inspired by The CDD movie's iconic green-on-black aesthetic.
+An ocean-inspired dark theme with calming blue tones.
 
 ### Color Palette
 
 | Color | Hex | Usage |
 |-------|-----|-------|
-| Primary | `#00ff41` | Bright cdd green, main text |
-| Secondary | `#008f11` | Darker green, subtitles |
-| Tertiary | `#003b00` | Very dark green, backgrounds |
-| Accent | `#00ff41` | Highlights |
-| BgBase | `#0d0d0d` | Near black background |
-| BgSubtle | `#1a1a1a` | Slightly lighter background |
-| BgOverlay | `#262626` | Overlay/modal background |
-| FgBase | `#00ff41` | Primary text |
-| FgMuted | `#008f11` | Secondary text |
-| FgSubtle | `#005500` | Tertiary text |
-| Success | `#00ff41` | Success messages |
-| Error | `#ff0000` | Error messages |
-| Warning | `#ffcc00` | Warning messages |
-| Info | `#00bfff` | Info messages (cyan) |
+| Primary | `#5eb5f7` | Clear ocean blue, main accents |
+| Secondary | `#7ec8e8` | Light sky blue, subtitles |
+| Tertiary | `#2d4a5e` | Deep ocean, backgrounds |
+| Accent | `#8fd4f4` | Bright water, highlights |
+| BgBase | `#0f1419` | Deep sea dark background |
+| BgSubtle | `#1a2028` | Slightly lighter background |
+| BgOverlay | `#232a32` | Overlay/modal background |
+| FgBase | `#c5d1de` | Soft white-blue text |
+| FgMuted | `#7a8b99` | Muted blue-gray text |
+| FgSubtle | `#4d5b66` | Subtle blue-gray text |
+| Border | `#2d4a5e` | Default border color |
+| BorderFocus | `#5eb5f7` | Focused border color |
+| Success | `#7ec8e8` | Light blue (calm success) |
+| Error | `#f4726d` | Coral red |
+| Warning | `#f4c56d` | Sandy amber |
+| Info | `#5eb5f7` | Ocean blue |
 
 ### Gradient Rendering
 
@@ -478,12 +485,16 @@ internal/tui/
 ├── tui.go                     # Main TUI model and entry point
 ├── keys.go                    # Global key bindings
 ├── page/
-│   └── page.go               # Page IDs and navigation messages
+│   ├── page.go               # Page IDs and navigation messages
+│   └── chat/
+│       ├── chat.go           # Chat page model
+│       ├── input.go          # Chat input component
+│       └── markdown.go       # Markdown renderer
 ├── util/
 │   └── util.go               # Utility types (Model interface, InfoMsg)
 ├── styles/
 │   ├── theme.go              # Theme struct, manager, gradient functions
-│   ├── cdd.go             # default theme colors
+│   ├── default.go            # Default ocean theme colors
 │   └── icons.go              # Unicode icons (✓, ✗, etc.)
 └── components/
     ├── logo/
@@ -527,13 +538,20 @@ task build
 task run
 ```
 
-**Entry point** (`internal/tui/tui.go:203-217`):
+**Entry point** (`internal/tui/tui.go`):
 
 ```go
-func Run(providers []catwalk.Provider, isFirstRun bool) error {
+// AgentFactory is a function that creates an agent from the current config.
+type AgentFactory func() (*agent.DefaultAgent, error)
+
+func Run(providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent, factory AgentFactory) error {
     styles.NewManager()
-    model := New(providers, isFirstRun)
+    model := New(providers, isFirstRun, ag, factory)
     p := tea.NewProgram(model)
+    model.program = p
+    if model.chatPage != nil {
+        model.chatPage.SetProgram(p)
+    }
     _, err := p.Run()
     return err
 }
@@ -542,7 +560,7 @@ func Run(providers []catwalk.Provider, isFirstRun bool) error {
 **Program options**:
 - Alt screen mode (set in View)
 - Mouse support (cell motion)
-- Background color from theme
+- Agent factory for post-wizard agent creation
 
 ---
 

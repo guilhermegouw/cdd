@@ -56,11 +56,13 @@ The system uses two model tiers following the pattern established by Crush CLI:
 | `large` | Complex tasks requiring full reasoning | Code generation, analysis, complex refactoring |
 | `small` | Simpler, faster tasks | Quick queries, simple transformations, summarization |
 
-**Implementation**: `internal/config/config.go:13-21`
+**Implementation**: `internal/config/config.go`
 
 ```go
+// SelectedModelType represents the tier of model (large or small).
 type SelectedModelType string
 
+// Model type constants.
 const (
     SelectedModelTypeLarge SelectedModelType = "large"
     SelectedModelTypeSmall SelectedModelType = "small"
@@ -97,7 +99,7 @@ Catwalk provides provider metadata including:
 - API endpoints
 - Model capabilities and pricing
 
-**Loading hierarchy** (`internal/config/providers.go:27-58`):
+**Loading hierarchy** (`internal/config/providers.go`):
 1. Fetch from Catwalk API (`https://catwalk.charm.sh`)
 2. Fall back to local cache (24-hour TTL)
 3. Fall back to embedded provider data
@@ -206,7 +208,7 @@ func GetChallenge() (verifier, challenge string, err error) {
 
 #### Authorization URL
 
-**Implementation**: `internal/oauth/claude/oauth.go:19-35`
+**Implementation**: `internal/oauth/claude/oauth.go`
 
 | Parameter | Value |
 |-----------|-------|
@@ -219,7 +221,7 @@ func GetChallenge() (verifier, challenge string, err error) {
 
 #### Token Exchange
 
-**Implementation**: `internal/oauth/claude/oauth.go:37-77`
+**Implementation**: `internal/oauth/claude/oauth.go`
 
 After the user authorizes and receives a code:
 
@@ -233,7 +235,7 @@ func ExchangeToken(ctx context.Context, code, verifier string) (*oauth.Token, er
 
 #### Token Refresh
 
-**Implementation**: `internal/oauth/claude/oauth.go:79-108`
+**Implementation**: `internal/oauth/claude/oauth.go`
 
 ```go
 func RefreshToken(ctx context.Context, refreshToken string) (*oauth.Token, error)
@@ -302,7 +304,7 @@ Project configuration takes precedence over global configuration.
 
 ### Configuration Structure
 
-**Top-level config** (`internal/config/config.go:75-86`):
+**Top-level config** (`internal/config/config.go`):
 
 ```json
 {

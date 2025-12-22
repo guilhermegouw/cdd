@@ -21,16 +21,16 @@ func NewInput() *Input {
 	ta := textarea.New()
 	ta.Placeholder = "Type a message... (ctrl+j for newline)"
 	ta.CharLimit = 4096
-	ta.MaxHeight = 5           // Allow up to 5 lines
-	ta.SetHeight(1)            // Start with single line
+	ta.MaxHeight = 5 // Allow up to 5 lines
+	ta.SetHeight(1)  // Start with single line
 	ta.ShowLineNumbers = false
 	ta.Focus()
 
 	// Remove cursor line highlight
-	styles := ta.Styles()
-	styles.Focused.CursorLine = lipgloss.NewStyle()
-	styles.Blurred.CursorLine = lipgloss.NewStyle()
-	ta.SetStyles(styles)
+	taStyles := ta.Styles()
+	taStyles.Focused.CursorLine = lipgloss.NewStyle()
+	taStyles.Blurred.CursorLine = lipgloss.NewStyle()
+	ta.SetStyles(taStyles)
 
 	// Customize key bindings: Enter should NOT insert newline (we handle submit externally)
 	// ctrl+j will insert newline
