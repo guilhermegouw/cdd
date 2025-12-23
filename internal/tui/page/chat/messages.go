@@ -7,6 +7,8 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/atotto/clipboard"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/guilhermegouw/cdd/internal/agent"
 	"github.com/guilhermegouw/cdd/internal/debug"
@@ -21,13 +23,25 @@ type MessageList struct { //nolint:govet // fieldalignment: preserving logical f
 	width      int
 	height     int
 	ready      bool
+
+	// Selection state
+	selectionStartCol  int
+	selectionStartLine int
+	selectionEndCol    int
+	selectionEndLine   int
+	selectionActive    bool
+	renderedContent    string // cached for selection extraction
 }
 
 // NewMessageList creates a new message list component.
 func NewMessageList() *MessageList {
 	return &MessageList{
-		messages:   []agent.Message{},
-		mdRenderer: NewMarkdownRenderer(),
+		messages:           []agent.Message{},
+		mdRenderer:         NewMarkdownRenderer(),
+		selectionStartCol:  -1,
+		selectionStartLine: -1,
+		selectionEndCol:    -1,
+		selectionEndLine:   -1,
 	}
 }
 
@@ -113,7 +127,15 @@ func (m *MessageList) View() string {
 	if !m.ready {
 		return "Loading..."
 	}
-	return m.viewport.View()
+
+	view := m.viewport.View()
+
+	// Apply selection highlighting if there's a selection
+	if m.HasSelection() {
+		view = m.applySelectionHighlight(view)
+	}
+
+	return view
 }
 
 // ScrollToBottom scrolls to the bottom of the list.
@@ -133,6 +155,7 @@ func (m *MessageList) updateContent() {
 		empty := t.S().Muted.Render("No messages yet. Type something to start chatting.")
 		content := lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, empty)
 		m.viewport.SetContent(content)
+		m.renderedContent = ""
 		return
 	}
 
@@ -153,6 +176,9 @@ func (m *MessageList) updateContent() {
 		Width(m.width-2).
 		Padding(0, 1).
 		Render(content)
+
+	// Cache for selection text extraction
+	m.renderedContent = paddedContent
 
 	m.viewport.SetContent(paddedContent)
 
@@ -246,4 +272,250 @@ func (m *MessageList) renderToolMessage(msg agent.Message, width int) string {
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+}
+
+// Selection methods
+
+// StartSelection begins a text selection at the given coordinates.
+func (m *MessageList) StartSelection(col, line int) {
+	// Adjust for viewport scroll offset
+	line += m.viewport.YOffset()
+
+	m.selectionStartCol = col
+	m.selectionStartLine = line
+	m.selectionEndCol = col
+	m.selectionEndLine = line
+	m.selectionActive = true
+
+	debug.Event("messages", "StartSelection", fmt.Sprintf("col=%d line=%d", col, line))
+}
+
+// EndSelection updates the end point of the current selection.
+func (m *MessageList) EndSelection(col, line int) {
+	if !m.selectionActive {
+		return
+	}
+
+	// Adjust for viewport scroll offset
+	line += m.viewport.YOffset()
+
+	m.selectionEndCol = col
+	m.selectionEndLine = line
+
+	debug.Event("messages", "EndSelection", fmt.Sprintf("col=%d line=%d", col, line))
+}
+
+// SelectionStop stops the active selection (mouse released).
+func (m *MessageList) SelectionStop() {
+	m.selectionActive = false
+}
+
+// SelectionClear clears the current selection.
+func (m *MessageList) SelectionClear() {
+	m.selectionStartCol = -1
+	m.selectionStartLine = -1
+	m.selectionEndCol = -1
+	m.selectionEndLine = -1
+	m.selectionActive = false
+}
+
+// HasSelection returns whether there is a non-empty selection.
+func (m *MessageList) HasSelection() bool {
+	return m.selectionStartCol >= 0 &&
+		(m.selectionEndCol != m.selectionStartCol || m.selectionEndLine != m.selectionStartLine)
+}
+
+// IsSelecting returns whether selection is currently active (mouse down).
+func (m *MessageList) IsSelecting() bool {
+	return m.selectionActive
+}
+
+// CopySelection copies the selected text to clipboard and returns a command.
+func (m *MessageList) CopySelection() tea.Cmd {
+	if !m.HasSelection() {
+		return nil
+	}
+
+	selectedText := m.getSelectedText()
+	if selectedText == "" {
+		return nil
+	}
+
+	// Clear selection after copy
+	m.SelectionClear()
+
+	// Use both OSC 52 and native clipboard for compatibility
+	return tea.Batch(
+		tea.SetClipboard(selectedText),
+		func() tea.Msg {
+			//nolint:errcheck // Best effort clipboard write; OSC 52 is primary
+			clipboard.WriteAll(selectedText)
+			return SelectionCopiedMsg{Text: selectedText}
+		},
+	)
+}
+
+// SelectionCopiedMsg is sent when text has been copied to clipboard.
+type SelectionCopiedMsg struct {
+	Text string
+}
+
+// getSelectedText extracts the text within the current selection.
+//
+//nolint:gocyclo // Complex due to multi-line selection handling
+func (m *MessageList) getSelectedText() string {
+	if !m.HasSelection() || m.renderedContent == "" {
+		return ""
+	}
+
+	// Normalize selection coordinates (start should be before end)
+	startLine, endLine := m.selectionStartLine, m.selectionEndLine
+	startCol, endCol := m.selectionStartCol, m.selectionEndCol
+
+	if startLine > endLine || (startLine == endLine && startCol > endCol) {
+		startLine, endLine = endLine, startLine
+		startCol, endCol = endCol, startCol
+	}
+
+	lines := strings.Split(m.renderedContent, "\n")
+	var result strings.Builder
+
+	for lineIdx := startLine; lineIdx <= endLine && lineIdx < len(lines); lineIdx++ {
+		if lineIdx < 0 {
+			continue
+		}
+
+		line := ansi.Strip(lines[lineIdx])
+
+		var lineStart, lineEnd int
+		switch {
+		case startLine == endLine:
+			// Single line selection
+			lineStart = startCol
+			lineEnd = endCol
+		case lineIdx == startLine:
+			// First line of multi-line selection
+			lineStart = startCol
+			lineEnd = len(line)
+		case lineIdx == endLine:
+			// Last line of multi-line selection
+			lineStart = 0
+			lineEnd = endCol
+		default:
+			// Middle lines
+			lineStart = 0
+			lineEnd = len(line)
+		}
+
+		// Clamp to line bounds
+		if lineStart < 0 {
+			lineStart = 0
+		}
+		if lineEnd > len(line) {
+			lineEnd = len(line)
+		}
+		if lineStart > lineEnd {
+			lineStart = lineEnd
+		}
+
+		if lineStart < len(line) {
+			result.WriteString(line[lineStart:lineEnd])
+		}
+
+		if lineIdx < endLine {
+			result.WriteByte('\n')
+		}
+	}
+
+	return strings.TrimSpace(result.String())
+}
+
+// applySelectionHighlight renders the view with selection highlighting.
+//
+//nolint:gocyclo // Complex due to multi-line selection highlighting
+func (m *MessageList) applySelectionHighlight(content string) string {
+	if !m.HasSelection() {
+		return content
+	}
+
+	t := styles.CurrentTheme()
+	selStyle := t.S().TextSelection
+
+	// Normalize selection coordinates
+	startLine, endLine := m.selectionStartLine, m.selectionEndLine
+	startCol, endCol := m.selectionStartCol, m.selectionEndCol
+
+	if startLine > endLine || (startLine == endLine && startCol > endCol) {
+		startLine, endLine = endLine, startLine
+		startCol, endCol = endCol, startCol
+	}
+
+	// Adjust for viewport offset (convert absolute line to viewport-relative)
+	viewportOffset := m.viewport.YOffset()
+	startLine -= viewportOffset
+	endLine -= viewportOffset
+
+	lines := strings.Split(content, "\n")
+	var result strings.Builder
+
+	for lineIdx, line := range lines {
+		if lineIdx >= startLine && lineIdx <= endLine {
+			// This line has selection
+			plainLine := ansi.Strip(line)
+
+			var lineStart, lineEnd int
+			switch {
+			case startLine == endLine:
+				lineStart = startCol
+				lineEnd = endCol
+			case lineIdx == startLine:
+				lineStart = startCol
+				lineEnd = len(plainLine)
+			case lineIdx == endLine:
+				lineStart = 0
+				lineEnd = endCol
+			default:
+				lineStart = 0
+				lineEnd = len(plainLine)
+			}
+
+			// Clamp to line bounds
+			if lineStart < 0 {
+				lineStart = 0
+			}
+			if lineEnd > len(plainLine) {
+				lineEnd = len(plainLine)
+			}
+			if lineStart > len(plainLine) {
+				lineStart = len(plainLine)
+			}
+
+			// Build the highlighted line
+			if lineStart >= lineEnd {
+				result.WriteString(line)
+			} else {
+				// Before selection
+				if lineStart > 0 && lineStart <= len(plainLine) {
+					result.WriteString(plainLine[:lineStart])
+				}
+				// Selected text
+				if lineEnd > lineStart {
+					selectedPart := plainLine[lineStart:lineEnd]
+					result.WriteString(selStyle.Render(selectedPart))
+				}
+				// After selection
+				if lineEnd < len(plainLine) {
+					result.WriteString(plainLine[lineEnd:])
+				}
+			}
+		} else {
+			result.WriteString(line)
+		}
+
+		if lineIdx < len(lines)-1 {
+			result.WriteByte('\n')
+		}
+	}
+
+	return result.String()
 }

@@ -120,6 +120,8 @@ func (m *Model) Init() tea.Cmd {
 }
 
 // Update handles messages.
+//
+//nolint:gocyclo // Complex due to handling many message types including mouse events
 func (m *Model) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
@@ -135,6 +137,63 @@ func (m *Model) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 		m.messages, cmd = m.messages.Update(msg)
 		debug.Event("chat", "MouseWheel", "routed to viewport")
 		return m, cmd
+
+	case tea.MouseClickMsg:
+		// Only handle clicks in the messages area
+		messagesHeight := m.messagesAreaHeight()
+		if msg.Y < messagesHeight && msg.Button == tea.MouseLeft {
+			debug.Event("chat", "MouseClick", fmt.Sprintf("x=%d y=%d in messages area", msg.X, msg.Y))
+			m.messages.StartSelection(msg.X, msg.Y)
+		}
+		return m, nil
+
+	case tea.MouseMotionMsg:
+		// Handle selection drag with auto-scroll at edges
+		messagesHeight := m.messagesAreaHeight()
+		if msg.Button == tea.MouseLeft && m.messages.IsSelecting() {
+			x, y := msg.X, msg.Y
+
+			// Auto-scroll when dragging near edges
+			if y < 0 {
+				m.messages.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+				y = 0
+			} else if y >= messagesHeight {
+				m.messages.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+				y = messagesHeight - 1
+			}
+
+			// Clamp x to valid range
+			if x < 0 {
+				x = 0
+			} else if x >= m.width {
+				x = m.width - 1
+			}
+
+			m.messages.EndSelection(x, y)
+			debug.Event("chat", "MouseMotion", fmt.Sprintf("selection updated x=%d y=%d", x, y))
+		}
+		return m, nil
+
+	case tea.MouseReleaseMsg:
+		if msg.Button == tea.MouseLeft && m.messages.IsSelecting() {
+			debug.Event("chat", "MouseRelease", fmt.Sprintf("x=%d y=%d", msg.X, msg.Y))
+			m.messages.SelectionStop()
+
+			// Copy selection to clipboard if there's a selection
+			if m.messages.HasSelection() {
+				cmd := m.messages.CopySelection()
+				if cmd != nil {
+					return m, cmd
+				}
+			}
+		}
+		return m, nil
+
+	case SelectionCopiedMsg:
+		// Show feedback in status bar briefly
+		m.status.SetStatus(StatusReady)
+		debug.Event("chat", "SelectionCopied", fmt.Sprintf("copied %d chars", len(msg.Text)))
+		return m, nil
 
 	case StreamTextMsg:
 		if len(m.messages.messages) > 0 {
@@ -332,13 +391,8 @@ func (m *Model) sendMessage(prompt string) tea.Cmd {
 func (m *Model) View() string {
 	t := styles.CurrentTheme()
 
-	// Calculate heights
-	statusHeight := 1
-	inputHeight := 3
-	messagesHeight := m.height - statusHeight - inputHeight - 2
-
-	// Set component sizes
-	m.messages.SetSize(m.width, messagesHeight)
+	// Set component sizes (messages height adjusts dynamically based on input)
+	m.messages.SetSize(m.width, m.messagesAreaHeight())
 	m.input.SetWidth(m.width)
 	m.status.SetWidth(m.width)
 
@@ -367,6 +421,18 @@ func (m *Model) View() string {
 func (m *Model) SetSize(width, height int) {
 	m.width = width
 	m.height = height
+}
+
+// messagesAreaHeight calculates the current height of the messages area.
+func (m *Model) messagesAreaHeight() int {
+	statusHeight := 1
+	inputHeight := m.input.Height()
+	separatorHeight := 1
+	h := m.height - statusHeight - inputHeight - separatorHeight
+	if h < 1 {
+		h = 1
+	}
+	return h
 }
 
 // Cursor returns the cursor position.

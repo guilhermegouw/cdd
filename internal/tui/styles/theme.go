@@ -51,6 +51,8 @@ type Styles struct {
 	Warning lipgloss.Style
 	Info    lipgloss.Style
 
+	TextSelection lipgloss.Style
+
 	TextInput textinput.Styles
 }
 
@@ -85,6 +87,10 @@ func (t *Theme) buildStyles() *Styles {
 		Error:   base.Foreground(t.Error),
 		Warning: base.Foreground(t.Warning),
 		Info:    base.Foreground(t.Info),
+
+		TextSelection: lipgloss.NewStyle().
+			Background(t.Tertiary).
+			Foreground(t.Accent),
 
 		TextInput: textinput.Styles{
 			Focused: textinput.StyleState{

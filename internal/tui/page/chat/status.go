@@ -86,7 +86,7 @@ func (s *StatusBar) View() string {
 		Width(s.width).
 		Padding(0, 1)
 
-	help := t.S().Muted.Render("Enter to send • Ctrl+C to quit")
+	help := t.S().Muted.Render("Enter to send • Drag to copy • Ctrl+C to quit")
 
 	left := statusStyle.Render(statusText)
 	right := help
