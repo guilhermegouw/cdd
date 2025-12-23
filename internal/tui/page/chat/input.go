@@ -56,6 +56,9 @@ func (i *Input) Update(msg tea.Msg) (*Input, tea.Cmd) {
 		return i, nil
 	}
 
+	// Track lines before update to detect large content changes (like paste)
+	linesBefore := i.textArea.LineCount()
+
 	// Pre-expand height before processing newline to prevent viewport scrolling.
 	// This ensures the textarea has room for the new line before it's added,
 	// so the viewport doesn't scroll and hide the first line.
@@ -74,14 +77,20 @@ func (i *Input) Update(msg tea.Msg) (*Input, tea.Cmd) {
 	i.textArea, cmd = i.textArea.Update(msg)
 
 	// Adjust height based on actual content (handles deletions and other changes)
-	lines := i.textArea.LineCount()
-	if lines < 1 {
-		lines = 1
+	actualLines := i.textArea.LineCount()
+	displayLines := actualLines
+	if displayLines < 1 {
+		displayLines = 1
 	}
-	if lines > 5 {
-		lines = 5
+	if displayLines > 5 {
+		displayLines = 5
 	}
-	i.textArea.SetHeight(lines)
+	i.textArea.SetHeight(displayLines)
+
+	// If content grew significantly (paste) and exceeds visible area, scroll to show cursor
+	if actualLines > 5 && actualLines-linesBefore > 1 {
+		i.textArea.MoveToEnd()
+	}
 
 	return i, cmd
 }
@@ -166,4 +175,10 @@ func (i *Input) Blur() {
 // Cursor returns the cursor for the input.
 func (i *Input) Cursor() *tea.Cursor {
 	return i.textArea.Cursor()
+}
+
+// Height returns the current height of the input including borders.
+func (i *Input) Height() int {
+	// textarea height + 2 for border (top + bottom)
+	return i.textArea.Height() + 2
 }
