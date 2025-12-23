@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
 
@@ -16,7 +17,7 @@ import (
 	"charm.land/fantasy/providers/openai"
 
 	"github.com/guilhermegouw/cdd/internal/config"
-	"github.com/guilhermegouw/cdd/internal/oauth/claude"
+	"github.com/guilhermegouw/cdd/internal/debug"
 )
 
 // Model wraps a fantasy language model with its metadata.
@@ -85,26 +86,27 @@ func (b *Builder) refreshExpiredTokens(ctx context.Context) error {
 		}
 
 		if !providerCfg.OAuthToken.IsExpired() {
+			expiresAt := time.Unix(providerCfg.OAuthToken.ExpiresAt, 0)
+			expiresIn := time.Until(expiresAt)
+			debug.Token("valid", fmt.Sprintf("provider=%s expires_in=%s", providerID, expiresIn.Round(time.Second)))
 			continue
 		}
 
+		expiresAt := time.Unix(providerCfg.OAuthToken.ExpiresAt, 0)
+		debug.Token("expired", fmt.Sprintf("provider=%s expiry=%s", providerID, expiresAt.Format(time.RFC3339)))
+
 		// Token is expired, try to refresh it.
-		newToken, err := claude.RefreshToken(ctx, providerCfg.OAuthToken.RefreshToken)
-		if err != nil {
+		// RefreshOAuthToken persists to disk immediately (critical for token rotation).
+		if err := b.cfg.RefreshOAuthToken(ctx, providerID); err != nil {
+			debug.Token("refresh_failed", fmt.Sprintf("provider=%s error=%v", providerID, err))
 			return fmt.Errorf("refreshing token for provider %q: %w (re-authenticate with: rm ~/.config/cdd/cdd.json && cdd)", providerID, err)
 		}
 
-		// Update the provider config with the new token.
-		providerCfg.OAuthToken = newToken
-		providerCfg.SetupClaudeCode()
+		newExpiresAt := time.Unix(providerCfg.OAuthToken.ExpiresAt, 0)
+		debug.Token("refreshed", fmt.Sprintf("provider=%s new_expiry=%s", providerID, newExpiresAt.Format(time.RFC3339)))
 
 		// Clear cached provider so it's rebuilt with new token.
 		delete(b.cache, providerID)
-
-		// Save the updated config to disk.
-		if err := config.Save(b.cfg); err != nil {
-			return fmt.Errorf("saving refreshed token: %w", err)
-		}
 	}
 
 	return nil
@@ -267,5 +269,17 @@ func (t *oauthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		reqCopy.Header.Set(key, value)
 	}
 
-	return t.base.RoundTrip(reqCopy)
+	// Log the API request
+	debug.API(reqCopy.Method, reqCopy.URL.Path, 0, "sending request")
+
+	resp, err := t.base.RoundTrip(reqCopy)
+	if err != nil {
+		debug.API(reqCopy.Method, reqCopy.URL.Path, 0, fmt.Sprintf("transport error: %v", err))
+		return nil, err
+	}
+
+	// Log the API response
+	debug.API(reqCopy.Method, reqCopy.URL.Path, resp.StatusCode, resp.Status)
+
+	return resp, nil
 }

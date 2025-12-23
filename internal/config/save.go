@@ -59,7 +59,7 @@ func SaveToFile(cfg *Config, path string) error {
 		return fmt.Errorf("marshaling config: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0o644); err != nil { //nolint:gosec // Config file permissions are intentional.
+	if err := os.WriteFile(path, data, 0o600); err != nil { //nolint:gosec // Restrictive permissions for security.
 		return fmt.Errorf("writing config file: %w", err)
 	}
 

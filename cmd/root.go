@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"charm.land/fantasy"
 	"github.com/adrg/xdg"
 	"github.com/spf13/cobra"
 
@@ -88,7 +89,17 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 		return createAgent(newCfg)
 	}
 
-	return tui.Run(providers, isFirstRun, ag, agentFactory)
+	// Define model factory for rebuilding model with fresh tokens.
+	// This allows swapping the model without creating a new agent, preserving session history.
+	modelFactory := func() (fantasy.LanguageModel, error) {
+		newCfg, err := config.Load()
+		if err != nil {
+			return nil, fmt.Errorf("loading config: %w", err)
+		}
+		return createModel(newCfg)
+	}
+
+	return tui.Run(providers, isFirstRun, ag, agentFactory, modelFactory)
 }
 
 func createAgent(cfg *config.Config) (*agent.DefaultAgent, error) {
@@ -118,6 +129,21 @@ func createAgent(cfg *config.Config) (*agent.DefaultAgent, error) {
 	}
 
 	return agent.New(agentCfg), nil
+}
+
+// createModel builds just the model from config with fresh tokens.
+// Used for swapping models after token refresh without creating a new agent.
+func createModel(cfg *config.Config) (fantasy.LanguageModel, error) {
+	ctx := context.Background()
+
+	// Build models from configuration (this reloads tokens from disk).
+	builder := provider.NewBuilder(cfg)
+	largeModel, _, err := builder.BuildModels(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("building models: %w", err)
+	}
+
+	return largeModel.Model, nil
 }
 
 // Execute runs the root command.

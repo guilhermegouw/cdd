@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/fantasy"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
 
@@ -22,6 +23,10 @@ import (
 // It's called after the wizard completes to create the agent without restarting.
 type AgentFactory func() (*agent.DefaultAgent, error)
 
+// ModelFactory rebuilds the model with fresh tokens from config.
+// This allows swapping the model without creating a new agent, preserving session history.
+type ModelFactory func() (fantasy.LanguageModel, error)
+
 // Model is the main TUI model.
 type Model struct {
 	welcome      *welcome.Welcome
@@ -29,6 +34,7 @@ type Model struct {
 	chatPage     *chat.Model
 	agent        *agent.DefaultAgent
 	agentFactory AgentFactory
+	modelFactory ModelFactory
 	program      *tea.Program
 	currentPage  page.ID
 	statusMsg    string
@@ -41,7 +47,7 @@ type Model struct {
 }
 
 // New creates a new TUI model.
-func New(providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent, factory AgentFactory) *Model {
+func New(providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent, agentFactory AgentFactory, modelFactory ModelFactory) *Model {
 	m := &Model{
 		keyMap:       DefaultKeyMap(),
 		providers:    providers,
@@ -49,13 +55,15 @@ func New(providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent, 
 		currentPage:  page.Welcome,
 		welcome:      welcome.New(),
 		agent:        ag,
-		agentFactory: factory,
+		agentFactory: agentFactory,
+		modelFactory: modelFactory,
 	}
 
 	// If we have an agent and it's not first run, go directly to chat.
 	if ag != nil && !isFirstRun {
 		m.chatPage = chat.New(ag)
-		m.chatPage.SetAgentFactory(chat.AgentFactory(factory))
+		m.chatPage.SetAgentFactory(chat.AgentFactory(agentFactory))
+		m.chatPage.SetModelFactory(chat.ModelFactory(modelFactory))
 		m.currentPage = page.Chat
 	}
 
@@ -111,6 +119,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.agent != nil {
 			m.chatPage = chat.New(m.agent)
 			m.chatPage.SetAgentFactory(chat.AgentFactory(m.agentFactory))
+			m.chatPage.SetModelFactory(chat.ModelFactory(m.modelFactory))
 			m.chatPage.SetSize(m.width, m.height)
 			m.chatPage.SetProgram(m.program)
 			m.currentPage = page.Chat
@@ -280,11 +289,11 @@ func (m *Model) updateComponentSizes() {
 }
 
 // Run starts the TUI program.
-func Run(providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent, factory AgentFactory) error {
+func Run(providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent, agentFactory AgentFactory, modelFactory ModelFactory) error {
 	// Initialize theme.
 	styles.NewManager()
 
-	model := New(providers, isFirstRun, ag, factory)
+	model := New(providers, isFirstRun, ag, agentFactory, modelFactory)
 	// In Bubble Tea v2, AltScreen and MouseMode are set in View()
 	p := tea.NewProgram(model)
 
