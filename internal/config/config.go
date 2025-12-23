@@ -4,8 +4,10 @@ package config
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
+	"github.com/tidwall/sjson"
 
 	"github.com/guilhermegouw/cdd/internal/oauth"
 	"github.com/guilhermegouw/cdd/internal/oauth/claude"
@@ -120,7 +122,7 @@ func (c *Config) SetKnownProviders(providers []catwalk.Provider) {
 }
 
 // RefreshOAuthToken refreshes the OAuth token for the given provider.
-// It updates the provider config with the new token and calls SetupClaudeCode.
+// It updates the provider config with the new token, persists to disk, and calls SetupClaudeCode.
 func (c *Config) RefreshOAuthToken(ctx context.Context, providerID string) error {
 	provider, ok := c.Providers[providerID]
 	if !ok {
@@ -135,7 +137,46 @@ func (c *Config) RefreshOAuthToken(ctx context.Context, providerID string) error
 		return fmt.Errorf("refreshing token for %q: %w", providerID, err)
 	}
 
+	// Persist tokens to disk IMMEDIATELY before updating in-memory state.
+	// This is critical because Anthropic uses token rotation - the old refresh token
+	// is invalidated as soon as we receive the new one.
+	if err := c.SetConfigField(fmt.Sprintf("providers.%s.oauth", providerID), newToken); err != nil {
+		return fmt.Errorf("persisting refreshed oauth token: %w", err)
+	}
+	if err := c.SetConfigField(fmt.Sprintf("providers.%s.api_key", providerID), newToken.AccessToken); err != nil {
+		return fmt.Errorf("persisting refreshed api_key: %w", err)
+	}
+
+	// Now safe to update in-memory state.
 	provider.OAuthToken = newToken
 	provider.SetupClaudeCode()
+	return nil
+}
+
+// SetConfigField updates a single field in the config file using JSON path notation.
+// This uses sjson for surgical updates - only the specified field is modified.
+func (c *Config) SetConfigField(key string, value any) error {
+	configPath := GlobalConfigPath()
+
+	//nolint:gosec // G304: configPath is from trusted GlobalConfigPath(), not user input.
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			data = []byte("{}")
+		} else {
+			return fmt.Errorf("reading config file: %w", err)
+		}
+	}
+
+	newData, err := sjson.Set(string(data), key, value)
+	if err != nil {
+		return fmt.Errorf("setting config field %q: %w", key, err)
+	}
+
+	//nolint:gosec // 0o600 is intentionally restrictive for security.
+	if err := os.WriteFile(configPath, []byte(newData), 0o600); err != nil {
+		return fmt.Errorf("writing config file: %w", err)
+	}
+
 	return nil
 }

@@ -56,10 +56,24 @@ func (i *Input) Update(msg tea.Msg) (*Input, tea.Cmd) {
 		return i, nil
 	}
 
+	// Pre-expand height before processing newline to prevent viewport scrolling.
+	// This ensures the textarea has room for the new line before it's added,
+	// so the viewport doesn't scroll and hide the first line.
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
+		if key.Matches(keyMsg, i.textArea.KeyMap.InsertNewline) {
+			currentLines := i.textArea.LineCount()
+			newHeight := currentLines + 1
+			if newHeight > 5 {
+				newHeight = 5
+			}
+			i.textArea.SetHeight(newHeight)
+		}
+	}
+
 	var cmd tea.Cmd
 	i.textArea, cmd = i.textArea.Update(msg)
 
-	// Auto-resize height based on content (max 5 lines)
+	// Adjust height based on actual content (handles deletions and other changes)
 	lines := i.textArea.LineCount()
 	if lines < 1 {
 		lines = 1

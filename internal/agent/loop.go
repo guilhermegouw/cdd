@@ -113,9 +113,10 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 		streamOpts.Temperature = opts.Temperature
 	}
 
-	// Track current assistant message
+	// Track current assistant message and tool results
 	var currentAssistant *Message
 	var assistantContent string
+	var pendingToolResults []Message // Collect tool results to save AFTER assistant message
 
 	streamOpts.OnTextDelta = func(id, text string) error {
 		if currentAssistant == nil {
@@ -179,14 +180,14 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 			tr.Content = "[Unsupported tool result type]"
 		}
 
-		// Add tool result as separate message
+		// Collect tool result to save AFTER assistant message (preserves correct order)
 		toolMsg := Message{
 			ID:          uuid.New().String(),
 			Role:        RoleTool,
 			ToolResults: []ToolResult{tr},
 			CreatedAt:   time.Now(),
 		}
-		a.sessions.AddMessage(sessionID, toolMsg)
+		pendingToolResults = append(pendingToolResults, toolMsg)
 
 		if callbacks.OnToolResult != nil {
 			return callbacks.OnToolResult(tr)
@@ -197,9 +198,14 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 	// Execute the agent
 	_, err := agent.Stream(ctx, streamOpts)
 
-	// Save assistant message if we have content
+	// Save assistant message FIRST (before tool results to maintain correct order)
 	if currentAssistant != nil && (currentAssistant.Content != "" || len(currentAssistant.ToolCalls) > 0) {
 		a.sessions.AddMessage(sessionID, *currentAssistant)
+	}
+
+	// Save tool results AFTER assistant message (they reference tool_calls in assistant message)
+	for _, toolMsg := range pendingToolResults {
+		a.sessions.AddMessage(sessionID, toolMsg)
 	}
 
 	if err != nil {
@@ -282,6 +288,14 @@ func (a *DefaultAgent) buildHistory(sessionID string) []fantasy.Message {
 	}
 
 	return history
+}
+
+// SetModel updates the agent's language model.
+// This is used to swap in a new model after token refresh without losing session history.
+func (a *DefaultAgent) SetModel(model fantasy.LanguageModel) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.model = model
 }
 
 // SetSystemPrompt sets the system prompt.

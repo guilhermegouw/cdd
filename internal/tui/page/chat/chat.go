@@ -46,10 +46,15 @@ type (
 // AgentFactory creates a new agent (used for rebuilding after token refresh).
 type AgentFactory func() (*agent.DefaultAgent, error)
 
+// ModelFactory rebuilds the model with fresh tokens from config.
+// This allows swapping the model without creating a new agent, preserving session history.
+type ModelFactory func() (fantasy.LanguageModel, error)
+
 // Model is the chat page model.
 type Model struct {
 	agent        *agent.DefaultAgent
 	agentFactory AgentFactory
+	modelFactory ModelFactory
 	messages     *MessageList
 	input        *Input
 	status       *StatusBar
@@ -80,10 +85,28 @@ func (m *Model) SetAgentFactory(factory AgentFactory) {
 	m.agentFactory = factory
 }
 
-// isUnauthorizedError checks if the error is a 401 Unauthorized response.
-func isUnauthorizedError(err error) bool {
+// SetModelFactory sets the factory for rebuilding models with fresh tokens.
+func (m *Model) SetModelFactory(factory ModelFactory) {
+	m.modelFactory = factory
+}
+
+// isAuthError checks if the error is an authentication-related HTTP error.
+// Only 401 and 403 indicate token issues. 400 is NOT included because it
+// can indicate many things (invalid request format, message history issues, etc).
+func isAuthError(err error) bool {
 	var providerErr *fantasy.ProviderError
-	return errors.As(err, &providerErr) && providerErr.StatusCode == http.StatusUnauthorized
+	if !errors.As(err, &providerErr) {
+		debug.Auth("error_check", fmt.Sprintf("not a ProviderError: %T - %v", err, err))
+		return false
+	}
+	debug.Auth("error_check", fmt.Sprintf("ProviderError status=%d message=%s", providerErr.StatusCode, providerErr.Message))
+	switch providerErr.StatusCode {
+	case http.StatusUnauthorized, // 401 - token expired/invalid
+		http.StatusForbidden: // 403 - token revoked/no permissions
+		debug.Auth("auth_error_detected", fmt.Sprintf("status=%d is auth error, will retry", providerErr.StatusCode))
+		return true
+	}
+	return false
 }
 
 // Init initializes the chat page.
@@ -205,17 +228,19 @@ func (m *Model) handleKey(msg tea.KeyMsg) (util.Model, tea.Cmd) {
 		}
 	}
 
-	// Pass key events to both viewport and input
 	var cmds []tea.Cmd
 
-	// Viewport handles scroll keys (up, down, pgup, pgdown, j, k, etc.)
-	var msgCmd tea.Cmd
-	m.messages, msgCmd = m.messages.Update(msg)
-	if msgCmd != nil {
-		cmds = append(cmds, msgCmd)
+	// Only pass key events to viewport when input is disabled (streaming mode).
+	// This prevents vim-style scroll keys (j/k) from interfering with typing.
+	if !m.input.IsEnabled() {
+		var msgCmd tea.Cmd
+		m.messages, msgCmd = m.messages.Update(msg)
+		if msgCmd != nil {
+			cmds = append(cmds, msgCmd)
+		}
 	}
 
-	// Input handles typing
+	// Input handles typing when enabled
 	var inputCmd tea.Cmd
 	m.input, inputCmd = m.input.Update(msg)
 	if inputCmd != nil {
@@ -268,24 +293,31 @@ func (m *Model) sendMessage(prompt string) tea.Cmd {
 			SessionID: m.sessionID,
 		}
 
+		debug.Auth("send_start", fmt.Sprintf("sending prompt length=%d", len(prompt)))
 		err := m.agent.Send(ctx, prompt, opts, callbacks)
 
-		// Handle 401 errors by rebuilding agent and retrying once.
-		if err != nil && isUnauthorizedError(err) && m.agentFactory != nil {
-			debug.Event("chat", "TokenRefresh", "401 error, attempting to rebuild agent")
+		// Handle auth errors (400/401/403) by rebuilding model and retrying once.
+		if err != nil && isAuthError(err) && m.modelFactory != nil {
+			debug.Auth("retry_start", "auth error detected, rebuilding model with fresh tokens")
 
-			// Try to rebuild the agent with fresh tokens.
-			newAgent, factoryErr := m.agentFactory()
+			// Rebuild model with fresh tokens from config.
+			newModel, factoryErr := m.modelFactory()
 			if factoryErr != nil {
-				debug.Error("chat", factoryErr, "failed to rebuild agent after 401")
+				debug.Auth("retry_failed", fmt.Sprintf("failed to rebuild model: %v", factoryErr))
 				return StreamErrorMsg{Error: fmt.Errorf("session expired, please restart: %w", err)}
 			}
 
-			// Update agent reference and retry.
-			m.agent = newAgent
+			// Swap the model - agent keeps its session history intact.
+			m.agent.SetModel(newModel)
 			streamedContent = "" // Reset streamed content for retry
 
+			debug.Auth("retry_attempt", "model rebuilt, retrying request")
 			err = m.agent.Send(ctx, prompt, opts, callbacks)
+			if err != nil {
+				debug.Auth("retry_result", fmt.Sprintf("retry failed: %v", err))
+			} else {
+				debug.Auth("retry_result", "retry succeeded")
+			}
 		}
 
 		if err != nil {
