@@ -223,7 +223,7 @@ func (m *MessageList) renderAssistantMessage(msg agent.Message, width int) strin
 
 	header := t.S().Primary.Bold(true).Render("Assistant")
 
-	parts := make([]string, 0, 3)
+	parts := make([]string, 0, 2)
 	parts = append(parts, header)
 
 	if msg.Content != "" {
@@ -238,40 +238,53 @@ func (m *MessageList) renderAssistantMessage(msg agent.Message, width int) strin
 		parts = append(parts, rendered)
 	}
 
-	// Render tool calls if any
-	for _, tc := range msg.ToolCalls {
-		toolCall := t.S().Muted.Render(fmt.Sprintf("  [Tool: %s]", tc.Name))
-		parts = append(parts, toolCall)
+	// Show subtle indicator for tool usage (tools are shown in activity panel during streaming)
+	if len(msg.ToolCalls) > 0 {
+		toolCount := len(msg.ToolCalls)
+		indicator := t.S().Muted.Render(fmt.Sprintf("⚡ %d tool%s used", toolCount, pluralize(toolCount)))
+		parts = append(parts, indicator)
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
 func (m *MessageList) renderToolMessage(msg agent.Message, width int) string {
+	// Tool results are no longer displayed inline - they're shown in the activity panel
+	// during streaming. For completed messages, we show a summary in the assistant message.
+	// Only show errors if present.
 	t := styles.CurrentTheme()
 
-	parts := make([]string, 0, len(msg.ToolResults)*2)
+	var errorParts []string
 	for _, tr := range msg.ToolResults {
-		header := t.S().Muted.Render(fmt.Sprintf("  [Result: %s]", tr.Name))
-
-		var contentStyle lipgloss.Style
 		if tr.IsError {
-			contentStyle = t.S().Error
-		} else {
-			contentStyle = t.S().Subtle
+			header := t.S().Error.Bold(true).Render(fmt.Sprintf("⚠ %s error:", tr.Name))
+			content := t.S().Error.Width(width - 4).Render(truncateToolResult(tr.Content))
+			errorParts = append(errorParts, header, content)
 		}
-
-		// Truncate long results
-		content := tr.Content
-		if len(content) > 500 {
-			content = content[:500] + "..."
-		}
-
-		result := contentStyle.Width(width - 4).Render(content)
-		parts = append(parts, header, result)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+	if len(errorParts) == 0 {
+		return ""
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Left, errorParts...)
+}
+
+// pluralize returns "s" if count != 1, empty string otherwise.
+func pluralize(count int) string {
+	if count == 1 {
+		return ""
+	}
+	return "s"
+}
+
+// truncateToolResult truncates a tool result for display.
+func truncateToolResult(content string) string {
+	const maxLen = 200
+	if len(content) <= maxLen {
+		return content
+	}
+	return content[:maxLen] + "..."
 }
 
 // Selection methods

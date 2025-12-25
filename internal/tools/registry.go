@@ -3,7 +3,16 @@ package tools
 
 import (
 	"charm.land/fantasy"
+
+	"github.com/guilhermegouw/cdd/internal/pubsub"
 )
+
+// RegistryConfig holds configuration for creating a tool registry.
+type RegistryConfig struct {
+	WorkingDir string
+	Hub        *pubsub.Hub
+	TodoStore  *TodoStore
+}
 
 // ToolMetadata holds metadata about a tool.
 type ToolMetadata struct {
@@ -86,50 +95,66 @@ func (r *Registry) Names() []string {
 }
 
 // DefaultRegistry creates a registry with the default set of tools.
+// Deprecated: Use NewDefaultRegistry instead.
 func DefaultRegistry(workingDir string) *Registry {
+	return NewDefaultRegistry(RegistryConfig{WorkingDir: workingDir})
+}
+
+// NewDefaultRegistry creates a registry with the default set of tools.
+func NewDefaultRegistry(cfg RegistryConfig) *Registry {
 	r := NewRegistry()
 
-	r.Register(NewReadTool(workingDir), ToolMetadata{
+	r.Register(NewReadTool(cfg.WorkingDir), ToolMetadata{
 		Name:        ReadToolName,
 		Category:    "file",
 		Description: "Read file contents with line numbers",
 		Safe:        true,
 	})
 
-	r.Register(NewGlobTool(workingDir), ToolMetadata{
+	r.Register(NewGlobTool(cfg.WorkingDir), ToolMetadata{
 		Name:        GlobToolName,
 		Category:    "file",
 		Description: "Find files by pattern",
 		Safe:        true,
 	})
 
-	r.Register(NewGrepTool(workingDir), ToolMetadata{
+	r.Register(NewGrepTool(cfg.WorkingDir), ToolMetadata{
 		Name:        GrepToolName,
 		Category:    "file",
 		Description: "Search file contents",
 		Safe:        true,
 	})
 
-	r.Register(NewWriteTool(workingDir), ToolMetadata{
+	r.Register(NewWriteTool(cfg.WorkingDir), ToolMetadata{
 		Name:        WriteToolName,
 		Category:    "file",
 		Description: "Write or create files",
 		Safe:        false,
 	})
 
-	r.Register(NewEditTool(workingDir), ToolMetadata{
+	r.Register(NewEditTool(cfg.WorkingDir), ToolMetadata{
 		Name:        EditToolName,
 		Category:    "file",
 		Description: "Edit file contents",
 		Safe:        false,
 	})
 
-	r.Register(NewBashTool(workingDir), ToolMetadata{
+	r.Register(NewBashTool(cfg.WorkingDir), ToolMetadata{
 		Name:        BashToolName,
 		Category:    "system",
 		Description: "Execute shell commands",
 		Safe:        false,
 	})
+
+	// Register TodoWrite if store is provided
+	if cfg.TodoStore != nil {
+		r.Register(NewTodoWriteTool(cfg.TodoStore, cfg.Hub), ToolMetadata{
+			Name:        TodoWriteToolName,
+			Category:    "task",
+			Description: "Manage task list for tracking progress",
+			Safe:        true,
+		})
+	}
 
 	return r
 }

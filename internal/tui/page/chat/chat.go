@@ -12,7 +12,11 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/guilhermegouw/cdd/internal/agent"
+	"github.com/guilhermegouw/cdd/internal/bridge"
 	"github.com/guilhermegouw/cdd/internal/debug"
+	"github.com/guilhermegouw/cdd/internal/events"
+	"github.com/guilhermegouw/cdd/internal/pubsub"
+	"github.com/guilhermegouw/cdd/internal/tools"
 	"github.com/guilhermegouw/cdd/internal/tui/styles"
 	"github.com/guilhermegouw/cdd/internal/tui/util"
 )
@@ -56,6 +60,8 @@ type Model struct {
 	agentFactory AgentFactory
 	modelFactory ModelFactory
 	messages     *MessageList
+	activity     *ActivityPanel
+	todoPanel    *TodoPanel
 	input        *Input
 	status       *StatusBar
 	program      *tea.Program
@@ -68,10 +74,12 @@ type Model struct {
 // New creates a new chat page model.
 func New(ag *agent.DefaultAgent) *Model {
 	return &Model{
-		agent:    ag,
-		messages: NewMessageList(),
-		input:    NewInput(),
-		status:   NewStatusBar(),
+		agent:     ag,
+		messages:  NewMessageList(),
+		activity:  NewActivityPanel(),
+		todoPanel: NewTodoPanel(),
+		input:     NewInput(),
+		status:    NewStatusBar(),
 	}
 }
 
@@ -88,6 +96,11 @@ func (m *Model) SetAgentFactory(factory AgentFactory) {
 // SetModelFactory sets the factory for rebuilding models with fresh tokens.
 func (m *Model) SetModelFactory(factory ModelFactory) {
 	m.modelFactory = factory
+}
+
+// SetModelName sets the model name to display in the status bar.
+func (m *Model) SetModelName(name string) {
+	m.status.SetModelName(name)
 }
 
 // isAuthError checks if the error is an authentication-related HTTP error.
@@ -202,15 +215,16 @@ func (m *Model) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 		return m, nil
 
 	case StreamToolCallMsg:
-		m.status.SetToolName(msg.ToolCall.Name)
+		m.activity.AddTool(msg.ToolCall.Name, msg.ToolCall.Input)
 		return m, nil
 
 	case StreamToolResultMsg:
-		m.status.SetStatus(StatusThinking)
+		m.activity.MarkToolDone(msg.ToolResult.Name)
 		return m, nil
 
 	case StreamCompleteMsg:
 		m.isStreaming = false
+		m.activity.Clear()
 		m.status.SetStatus(StatusReady)
 		m.input.Enable()
 		// Refresh messages from session
@@ -219,9 +233,30 @@ func (m *Model) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 
 	case StreamErrorMsg:
 		m.isStreaming = false
+		m.activity.Clear()
 		m.status.SetError(msg.Error.Error())
 		m.input.Enable()
 		return m, m.input.Focus()
+
+	case SpinnerTickMsg:
+		var cmd tea.Cmd
+		m.activity, cmd = m.activity.Update(msg)
+		// Sync spinner frame with todo panel
+		m.todoPanel.SetSpinner(m.activity.spinner)
+		return m, cmd
+
+	// Bridge messages from pub/sub system
+	case bridge.AgentEventMsg:
+		return m.handleAgentEvent(msg.Event)
+
+	case bridge.ToolEventMsg:
+		return m.handleToolEvent(msg.Event)
+
+	case bridge.AuthEventMsg:
+		return m.handleAuthEvent(msg.Event)
+
+	case bridge.TodoEventMsg:
+		return m.handleTodoEvent(msg.Event)
 	}
 
 	// Update messages (for viewport scrolling)
@@ -259,6 +294,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) (util.Model, tea.Cmd) {
 		m.isStreaming = true
 		m.status.SetStatus(StatusThinking)
 
+		// Start activity panel with spinner
+		spinnerCmd := m.activity.SetThinking(true)
+
 		// Add placeholder for assistant response
 		m.messages.AppendMessage(agent.Message{
 			Role:    agent.RoleUser,
@@ -270,12 +308,13 @@ func (m *Model) handleKey(msg tea.KeyMsg) (util.Model, tea.Cmd) {
 		})
 
 		// Send to agent
-		cmd := m.sendMessage(value)
-		return m, cmd
+		sendCmd := m.sendMessage(value)
+		return m, tea.Batch(spinnerCmd, sendCmd)
 
 	case "ctrl+c":
 		if m.isStreaming {
 			m.agent.Cancel(m.sessionID)
+			m.activity.Clear()
 			return m, nil
 		}
 		return m, tea.Quit
@@ -283,6 +322,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (util.Model, tea.Cmd) {
 	case "esc":
 		if m.isStreaming {
 			m.agent.Cancel(m.sessionID)
+			m.activity.Clear()
 			return m, nil
 		}
 	}
@@ -391,13 +431,17 @@ func (m *Model) sendMessage(prompt string) tea.Cmd {
 func (m *Model) View() string {
 	t := styles.CurrentTheme()
 
-	// Set component sizes (messages height adjusts dynamically based on input)
+	// Set component sizes (messages height adjusts dynamically based on input, activity, and todos)
 	m.messages.SetSize(m.width, m.messagesAreaHeight())
+	m.todoPanel.SetWidth(m.width)
+	m.activity.SetWidth(m.width)
 	m.input.SetWidth(m.width)
 	m.status.SetWidth(m.width)
 
 	// Render components
 	messagesView := m.messages.View()
+	todoView := m.todoPanel.View()
+	activityView := m.activity.View()
 	inputView := m.input.View()
 	statusView := m.status.View()
 
@@ -409,12 +453,22 @@ func (m *Model) View() string {
 		BorderForeground(t.Border).
 		Render("")
 
-	return lipgloss.JoinVertical(lipgloss.Left,
-		messagesView,
-		separator,
-		inputView,
-		statusView,
-	)
+	// Build layout - include panels only if they have content
+	var parts []string
+	parts = append(parts, messagesView)
+
+	// Todo panel appears above activity panel
+	if m.todoPanel.IsActive() {
+		parts = append(parts, separator, todoView)
+	}
+
+	if m.activity.IsActive() {
+		parts = append(parts, separator, activityView)
+	}
+
+	parts = append(parts, separator, inputView, statusView)
+
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
 // SetSize sets the chat page size.
@@ -428,7 +482,20 @@ func (m *Model) messagesAreaHeight() int {
 	statusHeight := 1
 	inputHeight := m.input.Height()
 	separatorHeight := 1
-	h := m.height - statusHeight - inputHeight - separatorHeight
+
+	// Account for todo panel if active (height + separator)
+	todoHeight := m.todoPanel.Height()
+	if todoHeight > 0 {
+		todoHeight++ // Add separator height
+	}
+
+	// Account for activity panel if active (height + separator)
+	activityHeight := m.activity.Height()
+	if activityHeight > 0 {
+		activityHeight++ // Add separator height
+	}
+
+	h := m.height - statusHeight - inputHeight - separatorHeight - todoHeight - activityHeight
 	if h < 1 {
 		h = 1
 	}
@@ -441,4 +508,134 @@ func (m *Model) Cursor() *tea.Cursor {
 		return m.input.Cursor()
 	}
 	return nil
+}
+
+// handleAgentEvent processes agent events from the pub/sub bridge.
+func (m *Model) handleAgentEvent(event pubsub.Event[events.AgentEvent]) (util.Model, tea.Cmd) {
+	// Only handle events for our session
+	if event.Payload.SessionID != m.sessionID {
+		return m, nil
+	}
+
+	//nolint:exhaustive // AgentEventCancelled handled same as Complete
+	switch event.Payload.Type {
+	case events.AgentEventTextDelta:
+		// Update the last message (assistant response) with new text
+		if len(m.messages.messages) > 0 {
+			lastMsg := m.messages.messages[len(m.messages.messages)-1]
+			m.messages.UpdateLast(lastMsg.Content + event.Payload.TextDelta)
+		}
+
+	case events.AgentEventToolCall:
+		if event.Payload.ToolCall != nil {
+			m.activity.AddTool(event.Payload.ToolCall.Name, event.Payload.ToolCall.Input)
+		}
+
+	case events.AgentEventToolResult:
+		if event.Payload.ToolResult != nil {
+			if event.Payload.ToolResult.IsError {
+				m.activity.MarkToolError(event.Payload.ToolResult.Name)
+			} else {
+				m.activity.MarkToolDone(event.Payload.ToolResult.Name)
+			}
+		}
+
+	case events.AgentEventComplete, events.AgentEventCancelled:
+		m.isStreaming = false
+		m.activity.Clear()
+		m.status.SetStatus(StatusReady)
+		m.input.Enable()
+		// Refresh messages from session to get final state
+		m.messages.SetMessages(m.agent.Sessions().GetMessages(m.sessionID))
+		return m, m.input.Focus()
+
+	case events.AgentEventError:
+		m.isStreaming = false
+		m.activity.Clear()
+		if event.Payload.Error != nil {
+			m.status.SetError(event.Payload.Error.Error())
+		} else {
+			m.status.SetError("unknown error")
+		}
+		m.input.Enable()
+		return m, m.input.Focus()
+	}
+
+	return m, nil
+}
+
+// handleToolEvent processes tool events from the pub/sub bridge.
+func (m *Model) handleToolEvent(event pubsub.Event[events.ToolEvent]) (util.Model, tea.Cmd) {
+	// Only handle events for our session
+	if event.Payload.SessionID != m.sessionID {
+		return m, nil
+	}
+
+	//nolint:exhaustive // ToolEventProgress only used for logging
+	switch event.Payload.Type {
+	case events.ToolEventStarted:
+		debug.Event("chat", "ToolStarted", fmt.Sprintf("tool=%s", event.Payload.ToolName))
+		m.activity.AddTool(event.Payload.ToolName, event.Payload.Input)
+
+	case events.ToolEventCompleted:
+		debug.Event("chat", "ToolCompleted", fmt.Sprintf("tool=%s duration=%v", event.Payload.ToolName, event.Payload.Duration))
+		m.activity.MarkToolDone(event.Payload.ToolName)
+
+	case events.ToolEventFailed:
+		debug.Event("chat", "ToolFailed", fmt.Sprintf("tool=%s error=%v", event.Payload.ToolName, event.Payload.Error))
+		m.activity.MarkToolError(event.Payload.ToolName)
+
+	case events.ToolEventProgress:
+		debug.Event("chat", "ToolProgress", fmt.Sprintf("tool=%s", event.Payload.ToolName))
+	}
+
+	return m, nil
+}
+
+// handleAuthEvent processes authentication events from the pub/sub bridge.
+func (m *Model) handleAuthEvent(event pubsub.Event[events.AuthEvent]) (util.Model, tea.Cmd) {
+	//nolint:exhaustive // AuthEventTokenExpired handled same as Expiring
+	switch event.Payload.Type {
+	case events.AuthEventTokenExpiring, events.AuthEventTokenExpired:
+		debug.Auth("token_expiring", fmt.Sprintf("provider=%s expires_at=%v", event.Payload.ProviderID, event.Payload.ExpiresAt))
+
+	case events.AuthEventTokenRefreshed:
+		debug.Auth("token_refreshed", fmt.Sprintf("provider=%s new_expires_at=%v", event.Payload.ProviderID, event.Payload.ExpiresAt))
+
+	case events.AuthEventRefreshFailed:
+		debug.Auth("refresh_failed", fmt.Sprintf("provider=%s error=%v", event.Payload.ProviderID, event.Payload.Error))
+		// Show error in status bar
+		if event.Payload.Error != nil {
+			m.status.SetError(fmt.Sprintf("Token refresh failed: %v", event.Payload.Error))
+		}
+	}
+
+	return m, nil
+}
+
+// handleTodoEvent processes todo events from the pub/sub bridge.
+func (m *Model) handleTodoEvent(event pubsub.Event[events.TodoEvent]) (util.Model, tea.Cmd) {
+	// Only handle events for our session
+	if event.Payload.SessionID != m.sessionID {
+		return m, nil
+	}
+
+	// Convert event todos to tools.TodoItem
+	todos := make([]tools.TodoItem, len(event.Payload.Todos))
+	for i, t := range event.Payload.Todos {
+		todos[i] = tools.TodoItem{
+			Content:    t.Content,
+			ActiveForm: t.ActiveForm,
+			Status:     tools.TodoStatus(t.Status),
+		}
+	}
+
+	m.todoPanel.SetTodos(todos)
+
+	// If there's an in-progress todo and no spinner running, start one
+	if m.todoPanel.HasInProgress() && !m.activity.IsActive() {
+		return m, m.activity.SetThinking(true)
+	}
+
+	return m, nil
 }

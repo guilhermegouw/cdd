@@ -8,6 +8,8 @@ import (
 	"charm.land/fantasy"
 	"github.com/google/uuid"
 
+	"github.com/guilhermegouw/cdd/internal/events"
+	"github.com/guilhermegouw/cdd/internal/pubsub"
 	"github.com/guilhermegouw/cdd/internal/tools"
 )
 
@@ -23,6 +25,7 @@ type DefaultAgent struct { //nolint:govet // fieldalignment: preserving logical 
 	workingDir     string
 	sessions       *SessionStore
 	activeRequests map[string]context.CancelFunc
+	hub            *pubsub.Hub
 	mu             sync.RWMutex
 }
 
@@ -35,6 +38,7 @@ func New(cfg Config) *DefaultAgent {
 		workingDir:     cfg.WorkingDir,
 		sessions:       NewSessionStore(),
 		activeRequests: make(map[string]context.CancelFunc),
+		hub:            cfg.Hub,
 	}
 }
 
@@ -118,10 +122,14 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 	var assistantContent string
 	var pendingToolResults []Message // Collect tool results to save AFTER assistant message
 
+	// Track message ID for events
+	var messageID string
+
 	streamOpts.OnTextDelta = func(id, text string) error {
 		if currentAssistant == nil {
+			messageID = uuid.New().String()
 			currentAssistant = &Message{
-				ID:        uuid.New().String(),
+				ID:        messageID,
 				Role:      RoleAssistant,
 				CreatedAt: time.Now(),
 			}
@@ -129,16 +137,20 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 		assistantContent += text
 		currentAssistant.Content = assistantContent
 
-		if callbacks.OnTextDelta != nil {
-			return callbacks.OnTextDelta(text)
+		// Publish text delta event
+		if a.hub != nil {
+			a.hub.Agent.Publish(pubsub.EventProgress,
+				events.NewTextDeltaEvent(sessionID, messageID, text))
 		}
+
 		return nil
 	}
 
 	streamOpts.OnToolCall = func(tc fantasy.ToolCallContent) error {
 		if currentAssistant == nil {
+			messageID = uuid.New().String()
 			currentAssistant = &Message{
-				ID:        uuid.New().String(),
+				ID:        messageID,
 				Role:      RoleAssistant,
 				CreatedAt: time.Now(),
 			}
@@ -151,9 +163,20 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 		}
 		currentAssistant.ToolCalls = append(currentAssistant.ToolCalls, toolCall)
 
-		if callbacks.OnToolCall != nil {
-			return callbacks.OnToolCall(toolCall)
+		// Publish tool call event
+		if a.hub != nil {
+			a.hub.Agent.Publish(pubsub.EventProgress,
+				events.NewToolCallEvent(sessionID, messageID, events.ToolCallInfo{
+					ID:    tc.ToolCallID,
+					Name:  tc.ToolName,
+					Input: tc.Input,
+				}))
+
+			// Also publish to Tool broker for tool-specific subscribers
+			a.hub.Tool.Publish(pubsub.EventStarted,
+				events.NewToolStartedEvent(sessionID, tc.ToolCallID, tc.ToolName, tc.Input))
 		}
+
 		return nil
 	}
 
@@ -189,9 +212,26 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 		}
 		pendingToolResults = append(pendingToolResults, toolMsg)
 
-		if callbacks.OnToolResult != nil {
-			return callbacks.OnToolResult(tr)
+		// Publish tool result event
+		if a.hub != nil {
+			a.hub.Agent.Publish(pubsub.EventProgress,
+				events.NewToolResultEvent(sessionID, messageID, events.ToolResultInfo{
+					ToolCallID: tr.ToolCallID,
+					Name:       tr.Name,
+					Content:    tr.Content,
+					IsError:    tr.IsError,
+				}))
+
+			// Publish to Tool broker
+			if tr.IsError {
+				a.hub.Tool.Publish(pubsub.EventFailed,
+					events.NewToolFailedEvent(sessionID, tr.ToolCallID, tr.Name, NewError(tr.Content), 0))
+			} else {
+				a.hub.Tool.Publish(pubsub.EventCompleted,
+					events.NewToolCompletedEvent(sessionID, tr.ToolCallID, tr.Name, tr.Content, 0))
+			}
 		}
+
 		return nil
 	}
 
@@ -209,14 +249,18 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 	}
 
 	if err != nil {
-		if callbacks.OnError != nil {
-			callbacks.OnError(err)
+		// Publish error event
+		if a.hub != nil {
+			a.hub.Agent.Publish(pubsub.EventFailed,
+				events.NewErrorEvent(sessionID, messageID, err))
 		}
 		return err
 	}
 
-	if callbacks.OnComplete != nil {
-		return callbacks.OnComplete()
+	// Publish completion event
+	if a.hub != nil {
+		a.hub.Agent.Publish(pubsub.EventCompleted,
+			events.NewCompleteEvent(sessionID, messageID))
 	}
 
 	return nil

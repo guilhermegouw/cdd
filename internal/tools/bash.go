@@ -135,6 +135,10 @@ func NewBashTool(workingDir string) fantasy.AgentTool {
 						"Command timed out after %v", timeout)), nil
 				case errors.Is(ctx.Err(), context.Canceled):
 					return fantasy.NewTextErrorResponse("Command was cancelled"), nil
+				default:
+					// Handle other errors (e.g., executable not found, permission denied)
+					return fantasy.NewTextErrorResponse(fmt.Sprintf(
+						"Command execution failed: %v", err)), nil
 				}
 			}
 

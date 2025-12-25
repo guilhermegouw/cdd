@@ -15,6 +15,7 @@ import (
 	"github.com/guilhermegouw/cdd/internal/config"
 	"github.com/guilhermegouw/cdd/internal/debug"
 	"github.com/guilhermegouw/cdd/internal/provider"
+	"github.com/guilhermegouw/cdd/internal/pubsub"
 	"github.com/guilhermegouw/cdd/internal/tools"
 	"github.com/guilhermegouw/cdd/internal/tui"
 )
@@ -35,6 +36,7 @@ It supports multiple phases of development:
 
 	cmd.Flags().Bool("debug", false, "Enable debug logging to ~/.cdd/debug.log")
 	cmd.AddCommand(newVersionCmd())
+	cmd.AddCommand(newStatusCmd())
 
 	return cmd
 }
@@ -71,10 +73,15 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
+	// Create the pub/sub hub for event distribution.
+	hub := pubsub.NewHub()
+	defer hub.Shutdown()
+
 	// Create agent if not first run.
 	var ag *agent.DefaultAgent
+	var modelName string
 	if !isFirstRun {
-		ag, err = createAgent(cfg)
+		ag, modelName, err = createAgent(cfg, hub)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: Failed to create agent: %v\n", err)
 		}
@@ -86,7 +93,8 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 		if err != nil {
 			return nil, fmt.Errorf("loading config: %w", err)
 		}
-		return createAgent(newCfg)
+		ag, _, err := createAgent(newCfg, hub)
+		return ag, err
 	}
 
 	// Define model factory for rebuilding model with fresh tokens.
@@ -99,36 +107,48 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 		return createModel(newCfg)
 	}
 
-	return tui.Run(providers, isFirstRun, ag, agentFactory, modelFactory)
+	return tui.Run(providers, isFirstRun, ag, agentFactory, modelFactory, hub, modelName)
 }
 
-func createAgent(cfg *config.Config) (*agent.DefaultAgent, error) {
+func createAgent(cfg *config.Config, hub *pubsub.Hub) (*agent.DefaultAgent, string, error) {
 	ctx := context.Background()
 
 	// Build models from configuration.
 	builder := provider.NewBuilder(cfg)
 	largeModel, _, err := builder.BuildModels(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("building models: %w", err)
+		return nil, "", fmt.Errorf("building models: %w", err)
 	}
 
 	// Get working directory.
 	cwd, err := os.Getwd()
 	if err != nil {
-		return nil, fmt.Errorf("getting working directory: %w", err)
+		return nil, "", fmt.Errorf("getting working directory: %w", err)
 	}
 
-	// Create tools registry.
-	registry := tools.DefaultRegistry(cwd)
+	// Create todo store and tools registry.
+	todoStore := tools.NewTodoStore()
+	registry := tools.NewDefaultRegistry(tools.RegistryConfig{
+		WorkingDir: cwd,
+		Hub:        hub,
+		TodoStore:  todoStore,
+	})
 
 	// Create agent configuration.
 	agentCfg := agent.Config{
 		Model:        largeModel.Model,
 		Tools:        registry.All(),
 		SystemPrompt: agent.DefaultSystemPrompt,
+		Hub:          hub,
 	}
 
-	return agent.New(agentCfg), nil
+	// Get model name for display
+	modelName := largeModel.CatwalkCfg.Name
+	if modelName == "" {
+		modelName = largeModel.CatwalkCfg.ID
+	}
+
+	return agent.New(agentCfg), modelName, nil
 }
 
 // createModel builds just the model from config with fresh tokens.

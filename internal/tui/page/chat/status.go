@@ -13,16 +13,15 @@ type Status int
 const (
 	StatusReady Status = iota
 	StatusThinking
-	StatusToolRunning
 	StatusError
 )
 
 // StatusBar displays the current chat status.
 type StatusBar struct {
-	toolName string
-	errorMsg string
-	width    int
-	status   Status
+	modelName string
+	errorMsg  string
+	width     int
+	status    Status
 }
 
 // NewStatusBar creates a new status bar.
@@ -36,15 +35,13 @@ func NewStatusBar() *StatusBar {
 func (s *StatusBar) SetStatus(status Status) {
 	s.status = status
 	if status == StatusReady {
-		s.toolName = ""
 		s.errorMsg = ""
 	}
 }
 
-// SetToolName sets the name of the currently running tool.
-func (s *StatusBar) SetToolName(name string) {
-	s.status = StatusToolRunning
-	s.toolName = name
+// SetModelName sets the model name to display.
+func (s *StatusBar) SetModelName(name string) {
+	s.modelName = name
 }
 
 // SetError sets an error message.
@@ -62,34 +59,36 @@ func (s *StatusBar) SetWidth(width int) {
 func (s *StatusBar) View() string {
 	t := styles.CurrentTheme()
 
-	var statusText string
-	var statusStyle lipgloss.Style
-
-	switch s.status {
-	case StatusReady:
-		statusText = "Ready"
-		statusStyle = t.S().Success
-	case StatusThinking:
-		statusText = "Thinking..."
-		statusStyle = t.S().Info
-	case StatusToolRunning:
-		statusText = "Running: " + s.toolName
-		statusStyle = t.S().Warning
-	case StatusError:
-		statusText = "Error: " + s.errorMsg
-		statusStyle = t.S().Error
-	}
-
 	// Don't set background color - let terminal use its native background
 	// to avoid polluting terminal state on exit
 	barStyle := lipgloss.NewStyle().
 		Width(s.width).
 		Padding(0, 1)
 
-	help := t.S().Muted.Render("Enter to send • Drag to copy • Ctrl+C to quit")
+	// Left side: model name or error
+	var left string
+	if s.status == StatusError && s.errorMsg != "" {
+		// Truncate long error messages
+		errMsg := s.errorMsg
+		maxLen := s.width / 2
+		if len(errMsg) > maxLen {
+			errMsg = errMsg[:maxLen-3] + "..."
+		}
+		left = t.S().Error.Render("Error: " + errMsg)
+	} else if s.modelName != "" {
+		left = t.S().Muted.Render(s.modelName)
+	}
 
-	left := statusStyle.Render(statusText)
-	right := help
+	// Right side: context-aware shortcuts
+	var shortcuts string
+	//nolint:exhaustive // StatusReady and StatusError use default case
+	switch s.status {
+	case StatusThinking:
+		shortcuts = "Esc cancel · Ctrl+C quit"
+	default:
+		shortcuts = "Enter send · Esc cancel · Ctrl+C quit"
+	}
+	right := t.S().Muted.Render(shortcuts)
 
 	gap := s.width - lipgloss.Width(left) - lipgloss.Width(right) - 4
 	if gap < 1 {

@@ -451,6 +451,11 @@ func (w *Wizard) IsComplete() bool {
 	return w.step == StepComplete
 }
 
+// SelectedLargeModel returns the selected large model, or nil if not yet selected.
+func (w *Wizard) SelectedLargeModel() *catwalk.Model {
+	return w.selectedLarge
+}
+
 // Cursor returns the cursor position for the current step.
 func (w *Wizard) Cursor() *tea.Cursor {
 	if w.step == StepAPIKey && w.apiKeyInput != nil {

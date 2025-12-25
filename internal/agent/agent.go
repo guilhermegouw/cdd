@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"charm.land/fantasy"
+
+	"github.com/guilhermegouw/cdd/internal/pubsub"
 )
 
 // Role represents the role of a message.
@@ -90,6 +92,7 @@ type Config struct { //nolint:govet // fieldalignment: preserving logical field 
 	SystemPrompt string
 	Tools        []fantasy.AgentTool
 	WorkingDir   string
+	Hub          *pubsub.Hub // Optional pub/sub hub for event publishing
 }
 
 // ErrSessionBusy is returned when a session is already processing a request.
