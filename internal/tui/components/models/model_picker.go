@@ -42,9 +42,10 @@ func (p *ModelPicker) SetConnection(conn *config.Connection) {
 	}
 
 	// Fall back to known providers from catwalk.
-	for _, provider := range p.cfg.KnownProviders() {
-		if string(provider.ID) == conn.ProviderID {
-			p.models = provider.Models
+	known := p.cfg.KnownProviders()
+	for i := range known {
+		if string(known[i].ID) == conn.ProviderID {
+			p.models = known[i].Models
 			return
 		}
 	}
@@ -108,16 +109,16 @@ func (p *ModelPicker) View() string {
 	sb.WriteString(t.S().Muted.Render("Select a model:"))
 	sb.WriteString("\n\n")
 
-	for i, model := range p.models {
-		modelName := model.Name
+	for i := range p.models {
+		modelName := p.models[i].Name
 		if modelName == "" {
-			modelName = model.ID
+			modelName = p.models[i].ID
 		}
 
 		// Build the line content.
 		var line string
-		if model.Name != "" && model.Name != model.ID {
-			line = modelName + " (" + model.ID + ")"
+		if p.models[i].Name != "" && p.models[i].Name != p.models[i].ID {
+			line = modelName + " (" + p.models[i].ID + ")"
 		} else {
 			line = modelName
 		}

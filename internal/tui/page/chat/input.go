@@ -138,7 +138,7 @@ func (i *Input) View() string {
 	result := inputStyle.Render(textAreaView)
 	debug.Event("input", "Render", fmt.Sprintf("viewID=%d result len=%d lines=%d", i.viewID, len(result), strings.Count(result, "\n")+1))
 	// Log first 100 chars of textarea view to see what it contains
-	if len(textAreaView) > 0 {
+	if textAreaView != "" {
 		preview := textAreaView
 		if len(preview) > 100 {
 			preview = preview[:100]

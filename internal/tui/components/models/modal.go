@@ -217,10 +217,9 @@ func (m *Modal) updateList(msg tea.Msg) (*Modal, tea.Cmd) {
 }
 
 func (m *Modal) updateAddProvider(msg tea.Msg) (*Modal, tea.Cmd) {
-	switch msg := msg.(type) {
-	case ProviderSelectedMsg:
+	if psm, ok := msg.(ProviderSelectedMsg); ok {
 		m.connectionForm.Reset()
-		m.connectionForm.SetProvider(msg.ProviderID, msg.ProviderName, msg.ProviderType)
+		m.connectionForm.SetProvider(psm.ProviderID, psm.ProviderName, psm.ProviderType)
 		m.step = StepAddForm
 		return m, m.connectionForm.Focus()
 	}
@@ -304,10 +303,9 @@ func (m *Modal) updateDeleteConfirm(msg tea.Msg) (*Modal, tea.Cmd) {
 }
 
 func (m *Modal) updateSelectConnection(msg tea.Msg) (*Modal, tea.Cmd) {
-	switch msg := msg.(type) {
-	case ConnectionSelectedMsg:
-		m.selectedConn = &msg.Connection
-		m.modelPicker.SetConnection(&msg.Connection)
+	if csm, ok := msg.(ConnectionSelectedMsg); ok {
+		m.selectedConn = &csm.Connection
+		m.modelPicker.SetConnection(&csm.Connection)
 		m.step = StepSelectModel
 		return m, nil
 	}
@@ -318,15 +316,14 @@ func (m *Modal) updateSelectConnection(msg tea.Msg) (*Modal, tea.Cmd) {
 }
 
 func (m *Modal) updateSelectModel(msg tea.Msg) (*Modal, tea.Cmd) {
-	switch msg := msg.(type) {
-	case ModelSelectedMsg:
+	if msm, ok := msg.(ModelSelectedMsg); ok {
 		// Set the active model in config.
-		if err := m.connManager.SetActiveModel(m.selectedTier, msg.ConnectionID, msg.ModelID); err != nil {
+		if err := m.connManager.SetActiveModel(m.selectedTier, msm.ConnectionID, msm.ModelID); err != nil {
 			return m, util.ReportError(err)
 		}
 
 		// Get model name for display.
-		modelName := msg.ModelID
+		modelName := msm.ModelID
 		if selected := m.modelPicker.Selected(); selected != nil && selected.Name != "" {
 			modelName = selected.Name
 		}
@@ -337,8 +334,8 @@ func (m *Modal) updateSelectModel(msg tea.Msg) (*Modal, tea.Cmd) {
 			util.CmdHandler(ModalClosedMsg{}),
 			util.CmdHandler(ModelSwitchedMsg{
 				Tier:         m.selectedTier,
-				ConnectionID: msg.ConnectionID,
-				ModelID:      msg.ModelID,
+				ConnectionID: msm.ConnectionID,
+				ModelID:      msm.ModelID,
 				ModelName:    modelName,
 			}),
 		)

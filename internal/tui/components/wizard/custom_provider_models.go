@@ -1,4 +1,6 @@
 // Package wizard provides custom provider wizard components.
+//
+//nolint:gocritic // appendCombine is stylistic preference; rangeValCopy is acceptable here.
 package wizard
 
 import (
@@ -9,8 +11,8 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
+
 	"github.com/guilhermegouw/cdd/internal/config"
 	"github.com/guilhermegouw/cdd/internal/tui/styles"
 	"github.com/guilhermegouw/cdd/internal/tui/util"
@@ -285,8 +287,8 @@ func (c *CustomProviderModels) renderModelList() string {
 
 	lines := []string{t.S().Text.Render("Configured Models:")}
 
-	for i, m := range c.models {
-		modelInfo := fmt.Sprintf("  %d. %s (%s)", i+1, m.Name, m.ID)
+	for i := range c.models {
+		modelInfo := fmt.Sprintf("  %d. %s (%s)", i+1, c.models[i].Name, c.models[i].ID)
 		lines = append(lines, t.S().Subtle.Render(modelInfo))
 	}
 

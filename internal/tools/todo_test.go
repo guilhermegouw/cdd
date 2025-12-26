@@ -1,3 +1,4 @@
+//nolint:goconst,errcheck // Test files use literal strings for clarity and intentionally ignore some errors.
 package tools
 
 import (
@@ -446,7 +447,7 @@ func TestValidateTodos_Invalid(t *testing.T) {
 }
 
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
+	return len(s) >= len(substr) && (s == substr || s != "" && containsHelper(s, substr))
 }
 
 func containsHelper(s, substr string) bool {

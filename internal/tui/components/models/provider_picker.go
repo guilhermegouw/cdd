@@ -1,3 +1,4 @@
+//nolint:goconst // Key strings are standard keyboard identifiers.
 package models
 
 import (
@@ -82,9 +83,9 @@ func (p *ProviderPicker) View() string {
 	sb.WriteString(t.S().Muted.Render("Select a provider:"))
 	sb.WriteString("\n\n")
 
-	for i, provider := range p.providers {
+	for i := range p.providers {
 		// Build line content.
-		line := provider.Name + " (" + string(provider.Type) + ")"
+		line := p.providers[i].Name + " (" + string(p.providers[i].Type) + ")"
 
 		// Render with cursor and styling.
 		if i == p.cursor {

@@ -12,7 +12,7 @@ import (
 	"github.com/guilhermegouw/cdd/internal/pubsub"
 )
 
-// Re-export events package functions for cleaner test code
+// Re-export events package functions for cleaner test code.
 var (
 	newTextDeltaEvent      = events.NewTextDeltaEvent
 	newToolStartedEvent    = events.NewToolStartedEvent

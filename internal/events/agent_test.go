@@ -1,3 +1,4 @@
+//nolint:dupl,goconst,errorlint // Test files use literal strings and direct error comparison.
 package events
 
 import (

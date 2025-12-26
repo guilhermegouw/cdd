@@ -14,6 +14,7 @@ import (
 // FormField indicates which field is focused.
 type FormField int
 
+// FormField constants.
 const (
 	FieldName FormField = iota
 	FieldAPIKey

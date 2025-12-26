@@ -1,3 +1,4 @@
+//nolint:errorlint // Test files use direct error comparison.
 package bridge
 
 import (

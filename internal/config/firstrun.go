@@ -29,8 +29,8 @@ func IsFirstRun() bool {
 
 // hasConfiguredConnections checks if any connections have authentication configured.
 func hasConfiguredConnections(cfg *Config) bool {
-	for _, conn := range cfg.Connections {
-		if conn.IsConfigured() {
+	for i := range cfg.Connections {
+		if cfg.Connections[i].IsConfigured() {
 			return true
 		}
 	}
@@ -52,12 +52,12 @@ func NeedsSetup() bool {
 
 	// Check if the configured models reference valid connections.
 	connManager := NewConnectionManager(cfg)
-	for _, model := range cfg.Models {
-		if model.ConnectionID == "" {
+	for tier := range cfg.Models {
+		if cfg.Models[tier].ConnectionID == "" {
 			// No connection ID means this model hasn't been properly configured.
 			return true
 		}
-		conn := connManager.Get(model.ConnectionID)
+		conn := connManager.Get(cfg.Models[tier].ConnectionID)
 		if conn == nil || !conn.IsConfigured() {
 			return true
 		}

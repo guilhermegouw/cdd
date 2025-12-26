@@ -1,4 +1,6 @@
 // Package wizard implements the setup wizard for CDD CLI.
+//
+//nolint:goconst // Key strings are standard keyboard identifiers.
 package wizard
 
 import (
@@ -590,6 +592,8 @@ func (w *Wizard) oauthStepIndex() int {
 	switch w.step {
 	case StepProvider:
 		return 0
+	case StepCustomProviderMethod, StepCustomProviderDefine, StepCustomProviderModels:
+		return 0 // Custom provider steps are not shown in OAuth progress.
 	case StepAuthMethod:
 		return 1
 	case StepOAuth, StepAPIKey:
@@ -608,6 +612,8 @@ func (w *Wizard) apiKeyStepIndex() int {
 	switch w.step {
 	case StepProvider:
 		return 0
+	case StepCustomProviderMethod, StepCustomProviderDefine, StepCustomProviderModels:
+		return 0 // Custom provider steps are not shown in API key progress.
 	case StepAuthMethod, StepAPIKey, StepOAuth:
 		return 1
 	case StepLargeModel:
@@ -616,7 +622,6 @@ func (w *Wizard) apiKeyStepIndex() int {
 		return 3
 	case StepComplete:
 		return 4
-	default:
-		return 0
 	}
+	return 0
 }

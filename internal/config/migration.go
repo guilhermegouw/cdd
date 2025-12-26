@@ -14,7 +14,7 @@ import (
 // 1. Checks if connections already exist (skip if so)
 // 2. Creates a connection for each provider with API key or OAuth configured
 // 3. Updates model selections to use the new connection IDs
-// 4. Persists the changes to disk
+// 4. Persists the changes to disk.
 func MigrateToConnections(cfg *Config) error {
 	// Skip if already migrated (connections exist).
 	if len(cfg.Connections) > 0 {
@@ -66,7 +66,8 @@ func MigrateToConnections(cfg *Config) error {
 	}
 
 	// Update model selections to use connection IDs.
-	for tier, model := range cfg.Models {
+	for tier := range cfg.Models {
+		model := cfg.Models[tier]
 		if model.Provider != "" {
 			if connID, ok := providerToConnectionID[model.Provider]; ok {
 				model.ConnectionID = connID

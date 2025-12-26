@@ -76,9 +76,9 @@ func (m *ConnectionManager) GetByName(name string) *Connection {
 // GetByProvider returns all connections for a given provider ID.
 func (m *ConnectionManager) GetByProvider(providerID string) []Connection {
 	var result []Connection
-	for _, c := range m.cfg.Connections {
-		if c.ProviderID == providerID {
-			result = append(result, c)
+	for i := range m.cfg.Connections {
+		if m.cfg.Connections[i].ProviderID == providerID {
+			result = append(result, m.cfg.Connections[i])
 		}
 	}
 	return result
@@ -119,19 +119,20 @@ func (m *ConnectionManager) Add(conn Connection) error {
 // Update modifies an existing connection.
 func (m *ConnectionManager) Update(conn Connection) error {
 	for i := range m.cfg.Connections {
-		if m.cfg.Connections[i].ID == conn.ID {
-			// Preserve original CreatedAt.
-			conn.CreatedAt = m.cfg.Connections[i].CreatedAt
-			conn.UpdatedAt = time.Now()
-
-			// Check for duplicate name (excluding self).
-			if existing := m.GetByName(conn.Name); existing != nil && existing.ID != conn.ID {
-				return fmt.Errorf("connection with name %q already exists", conn.Name)
-			}
-
-			m.cfg.Connections[i] = conn
-			return Save(m.cfg)
+		if m.cfg.Connections[i].ID != conn.ID {
+			continue
 		}
+		// Preserve original CreatedAt.
+		conn.CreatedAt = m.cfg.Connections[i].CreatedAt
+		conn.UpdatedAt = time.Now()
+
+		// Check for duplicate name (excluding self).
+		if existing := m.GetByName(conn.Name); existing != nil && existing.ID != conn.ID {
+			return fmt.Errorf("connection with name %q already exists", conn.Name)
+		}
+
+		m.cfg.Connections[i] = conn
+		return Save(m.cfg)
 	}
 	return fmt.Errorf("connection %q not found", conn.ID)
 }

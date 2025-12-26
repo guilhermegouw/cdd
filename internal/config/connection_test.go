@@ -1,3 +1,4 @@
+//nolint:errcheck // Test file, errors are intentionally ignored for testing purposes.
 package config
 
 import (

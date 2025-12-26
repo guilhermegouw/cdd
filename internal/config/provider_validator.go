@@ -102,8 +102,8 @@ func ValidateCustomProvider(p *CustomProvider, existingProviderIDs []string) *Va
 		})
 	} else {
 		modelIDs := make(map[string]bool)
-		for i, model := range p.Models {
-			if model.ID == "" {
+		for i := range p.Models {
+			if p.Models[i].ID == "" {
 				result.Errors = append(result.Errors, ValidationError{
 					Field:   fmt.Sprintf("models[%d].id", i),
 					Message: "model ID is required",
@@ -112,17 +112,17 @@ func ValidateCustomProvider(p *CustomProvider, existingProviderIDs []string) *Va
 			}
 
 			// Check for duplicate model IDs.
-			if modelIDs[model.ID] {
+			if modelIDs[p.Models[i].ID] {
 				result.Errors = append(result.Errors, ValidationError{
 					Field:   fmt.Sprintf("models[%d].id", i),
-					Message: fmt.Sprintf("duplicate model ID %q", model.ID),
+					Message: fmt.Sprintf("duplicate model ID %q", p.Models[i].ID),
 				})
 				result.IsValid = false
 			}
-			modelIDs[model.ID] = true
+			modelIDs[p.Models[i].ID] = true
 
 			// Warn if model name is missing.
-			if model.Name == "" {
+			if p.Models[i].Name == "" {
 				result.Warnings = append(result.Warnings, ValidationWarning{
 					Field:   fmt.Sprintf("models[%d].name", i),
 					Message: "model name is empty",
@@ -146,8 +146,8 @@ func ValidateCustomProvider(p *CustomProvider, existingProviderIDs []string) *Va
 	// Validate default model IDs exist.
 	if p.DefaultLargeModelID != "" {
 		found := false
-		for _, model := range p.Models {
-			if model.ID == p.DefaultLargeModelID {
+		for i := range p.Models {
+			if p.Models[i].ID == p.DefaultLargeModelID {
 				found = true
 				break
 			}
@@ -162,8 +162,8 @@ func ValidateCustomProvider(p *CustomProvider, existingProviderIDs []string) *Va
 
 	if p.DefaultSmallModelID != "" {
 		found := false
-		for _, model := range p.Models {
-			if model.ID == p.DefaultSmallModelID {
+		for i := range p.Models {
+			if p.Models[i].ID == p.DefaultSmallModelID {
 				found = true
 				break
 			}

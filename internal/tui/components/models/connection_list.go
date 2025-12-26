@@ -114,7 +114,7 @@ func (l *ConnectionList) View() string {
 
 	var sb strings.Builder
 
-	for i, conn := range l.connections {
+	for i := range l.connections {
 		// Cursor indicator.
 		cursor := "  "
 		style := t.S().Text
@@ -124,17 +124,17 @@ func (l *ConnectionList) View() string {
 		}
 
 		// Build connection line.
-		name := style.Render(conn.Name)
+		name := style.Render(l.connections[i].Name)
 
 		// Provider info in muted.
-		providerInfo := t.S().Muted.Render(fmt.Sprintf(" (%s)", conn.ProviderID))
+		providerInfo := t.S().Muted.Render(fmt.Sprintf(" (%s)", l.connections[i].ProviderID))
 
 		// Active model indicators.
 		var indicators []string
-		if conn.ID == l.activeConnLg {
+		if l.connections[i].ID == l.activeConnLg {
 			indicators = append(indicators, t.S().Primary.Render("[L]"))
 		}
-		if conn.ID == l.activeConnSm {
+		if l.connections[i].ID == l.activeConnSm {
 			indicators = append(indicators, t.S().Subtitle.Render("[S]"))
 		}
 		indicatorStr := ""

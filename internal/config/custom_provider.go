@@ -127,8 +127,8 @@ func (m *CustomProviderManager) Add(provider CustomProvider) error {
 	}
 
 	// Check for duplicate ID.
-	for _, p := range providers {
-		if p.ID == provider.ID {
+	for i := range providers {
+		if providers[i].ID == provider.ID {
 			return fmt.Errorf("provider with ID %q already exists", provider.ID)
 		}
 	}
@@ -148,15 +148,16 @@ func (m *CustomProviderManager) Update(providerID string, updated CustomProvider
 	}
 
 	found := false
-	for i, p := range providers {
-		if p.ID == providerID {
-			// Preserve creation timestamp.
-			updated.CreatedAt = p.CreatedAt
-			updated.UpdatedAt = time.Now()
-			providers[i] = updated
-			found = true
-			break
+	for i := range providers {
+		if providers[i].ID != providerID {
+			continue
 		}
+		// Preserve creation timestamp.
+		updated.CreatedAt = providers[i].CreatedAt
+		updated.UpdatedAt = time.Now()
+		providers[i] = updated
+		found = true
+		break
 	}
 
 	if !found {
@@ -179,9 +180,9 @@ func (m *CustomProviderManager) Remove(providerID string) error {
 		capacity = 0
 	}
 	newProviders := make([]CustomProvider, 0, capacity)
-	for _, p := range providers {
-		if p.ID != providerID {
-			newProviders = append(newProviders, p)
+	for i := range providers {
+		if providers[i].ID != providerID {
+			newProviders = append(newProviders, providers[i])
 		} else {
 			found = true
 		}
@@ -201,9 +202,9 @@ func (m *CustomProviderManager) Get(providerID string) (*CustomProvider, error) 
 		return nil, err
 	}
 
-	for _, p := range providers {
-		if p.ID == providerID {
-			return &p, nil
+	for i := range providers {
+		if providers[i].ID == providerID {
+			return &providers[i], nil
 		}
 	}
 
@@ -217,8 +218,8 @@ func (m *CustomProviderManager) Exists(providerID string) bool {
 		return false
 	}
 
-	for _, p := range providers {
-		if p.ID == providerID {
+	for i := range providers {
+		if providers[i].ID == providerID {
 			return true
 		}
 	}

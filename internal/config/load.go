@@ -134,26 +134,26 @@ func findProjectConfig() string {
 }
 
 func mergeConfig(dst, src *Config) {
-	for tier, model := range src.Models {
-		dst.Models[tier] = model
+	for tier := range src.Models {
+		dst.Models[tier] = src.Models[tier]
 	}
 
-	for name, provider := range src.Providers {
-		dst.Providers[name] = provider
+	for name := range src.Providers {
+		dst.Providers[name] = src.Providers[name]
 	}
 
 	// Merge connections (project connections override global by ID).
 	if len(src.Connections) > 0 {
 		connMap := make(map[string]Connection)
-		for _, c := range dst.Connections {
-			connMap[c.ID] = c
+		for i := range dst.Connections {
+			connMap[dst.Connections[i].ID] = dst.Connections[i]
 		}
-		for _, c := range src.Connections {
-			connMap[c.ID] = c
+		for i := range src.Connections {
+			connMap[src.Connections[i].ID] = src.Connections[i]
 		}
 		dst.Connections = make([]Connection, 0, len(connMap))
-		for _, c := range connMap {
-			dst.Connections = append(dst.Connections, c)
+		for id := range connMap {
+			dst.Connections = append(dst.Connections, connMap[id])
 		}
 	}
 
@@ -203,29 +203,29 @@ func ensureProvidersFromConnections(cfg *Config, knownProviders []catwalk.Provid
 		knownByID[string(knownProviders[i].ID)] = &knownProviders[i]
 	}
 
-	for _, conn := range cfg.Connections {
-		if conn.ProviderID == "" {
+	for i := range cfg.Connections {
+		if cfg.Connections[i].ProviderID == "" {
 			continue
 		}
 
 		// Skip if provider already exists in cfg.Providers.
-		if _, exists := cfg.Providers[conn.ProviderID]; exists {
+		if _, exists := cfg.Providers[cfg.Connections[i].ProviderID]; exists {
 			continue
 		}
 
 		// Look up the provider in knownProviders.
-		known, ok := knownByID[conn.ProviderID]
+		known, ok := knownByID[cfg.Connections[i].ProviderID]
 		if !ok {
 			// Provider not in known list - might be a custom provider.
 			// Create a minimal entry.
-			cfg.Providers[conn.ProviderID] = &ProviderConfig{
-				ID: conn.ProviderID,
+			cfg.Providers[cfg.Connections[i].ProviderID] = &ProviderConfig{
+				ID: cfg.Connections[i].ProviderID,
 			}
 			continue
 		}
 
 		// Create a provider config from the known provider metadata.
-		cfg.Providers[conn.ProviderID] = &ProviderConfig{
+		cfg.Providers[cfg.Connections[i].ProviderID] = &ProviderConfig{
 			ID:      string(known.ID),
 			Name:    known.Name,
 			Type:    known.Type,
@@ -337,7 +337,8 @@ func configureDefaultModels(cfg *Config) error {
 func validateModels(cfg *Config) error {
 	connManager := NewConnectionManager(cfg)
 
-	for tier, model := range cfg.Models {
+	for tier := range cfg.Models {
+		model := cfg.Models[tier]
 		// If ConnectionID is set, validate via connection (new system).
 		if model.ConnectionID != "" {
 			conn := connManager.Get(model.ConnectionID)

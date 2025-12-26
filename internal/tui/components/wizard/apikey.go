@@ -1,3 +1,4 @@
+//nolint:goconst // Key strings are standard keyboard identifiers.
 package wizard
 
 import (

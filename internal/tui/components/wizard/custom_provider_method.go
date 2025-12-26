@@ -12,6 +12,7 @@ import (
 // ProviderImportMethod represents the import method choice.
 type ProviderImportMethod int
 
+// ProviderImportMethod constants.
 const (
 	ProviderImportMethodManual ProviderImportMethod = iota
 	ProviderImportMethodURL

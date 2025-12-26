@@ -1,4 +1,6 @@
 // Package config provides provider loading and merging functionality.
+//
+//nolint:gocritic // rangeValCopy is acceptable for catwalk types.
 package config
 
 import (
@@ -42,7 +44,7 @@ func (pl *ProviderLoader) DisableAutoUpdates() {
 // 2. Load custom providers from storage
 // 3. Merge by provider ID (custom providers override catwalk)
 // 4. Validate all providers
-// 5. Return combined list
+// 5. Return combined list.
 func (pl *ProviderLoader) LoadAllProviders(cfg *Config) ([]catwalk.Provider, error) {
 	// Load catwalk providers.
 	catwalkProviders, err := pl.loadCatwalkProviders(cfg)
@@ -74,9 +76,8 @@ func (pl *ProviderLoader) loadCatwalkProviders(cfg *Config) ([]catwalk.Provider,
 		// Successfully fetched, update cache.
 		dataDir := cfg.DataDir()
 		cachePath := getProvidersCachePath(dataDir)
-		if cacheErr := saveProvidersCache(cachePath, providers); cacheErr != nil {
-			// Cache write failure is non-fatal, continue with fetched data.
-		}
+		// Cache write failure is non-fatal, ignore error.
+		_ = saveProvidersCache(cachePath, providers) //nolint:errcheck // intentionally ignoring cache write error
 		return providers, nil
 	}
 
@@ -99,8 +100,8 @@ func (pl *ProviderLoader) mergeProviders(catwalkProviders []catwalk.Provider, cu
 	}
 
 	// Override with custom providers.
-	for _, cp := range customProviders {
-		catwalkMap[cp.ID] = cp.ToCatwalkProvider()
+	for i := range customProviders {
+		catwalkMap[customProviders[i].ID] = customProviders[i].ToCatwalkProvider()
 	}
 
 	// Convert map back to slice.

@@ -9,8 +9,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
+	"github.com/spf13/cobra"
+
 	"github.com/guilhermegouw/cdd/internal/config"
 )
 
@@ -73,8 +74,8 @@ func runProvidersList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	catwalkOnly, _ := cmd.Flags().GetBool("catwalk-only")
-	customOnly, _ := cmd.Flags().GetBool("custom-only")
+	catwalkOnly, _ := cmd.Flags().GetBool("catwalk-only") //nolint:errcheck // Flag is defined, error is safe to ignore.
+	customOnly, _ := cmd.Flags().GetBool("custom-only")   //nolint:errcheck // Flag is defined, error is safe to ignore.
 
 	// Get catwalk providers.
 	loader := config.NewProviderLoader(cfg.DataDir())
@@ -97,10 +98,10 @@ func runProvidersList(cmd *cobra.Command, args []string) error {
 	if !customOnly {
 		// Print catwalk providers.
 		catwalkCount := 0
-		for _, p := range allProviders {
+		for k := range allProviders {
 			isCustom := false
-			for _, cp := range customProviders {
-				if cp.ID == string(p.ID) {
+			for j := range customProviders {
+				if customProviders[j].ID == string(allProviders[k].ID) {
 					isCustom = true
 					break
 				}
@@ -109,12 +110,12 @@ func runProvidersList(cmd *cobra.Command, args []string) error {
 				continue
 			}
 			catwalkCount++
-			fmt.Printf("  %s (%s)\n", p.Name, p.ID)
-			if p.DefaultLargeModelID != "" {
-				fmt.Printf("    Large: %s\n", p.DefaultLargeModelID)
+			fmt.Printf("  %s (%s)\n", allProviders[k].Name, allProviders[k].ID)
+			if allProviders[k].DefaultLargeModelID != "" {
+				fmt.Printf("    Large: %s\n", allProviders[k].DefaultLargeModelID)
 			}
-			if p.DefaultSmallModelID != "" {
-				fmt.Printf("    Small: %s\n", p.DefaultSmallModelID)
+			if allProviders[k].DefaultSmallModelID != "" {
+				fmt.Printf("    Small: %s\n", allProviders[k].DefaultSmallModelID)
 			}
 		}
 		if catwalkCount > 0 {
@@ -127,16 +128,16 @@ func runProvidersList(cmd *cobra.Command, args []string) error {
 			if !customOnly {
 				fmt.Println()
 			}
-			for _, cp := range customProviders {
-				fmt.Printf("  %s (%s) [Custom]\n", cp.Name, cp.ID)
-				if cp.DefaultLargeModelID != "" {
-					fmt.Printf("    Large: %s\n", cp.DefaultLargeModelID)
+			for i := range customProviders {
+				fmt.Printf("  %s (%s) [Custom]\n", customProviders[i].Name, customProviders[i].ID)
+				if customProviders[i].DefaultLargeModelID != "" {
+					fmt.Printf("    Large: %s\n", customProviders[i].DefaultLargeModelID)
 				}
-				if cp.DefaultSmallModelID != "" {
-					fmt.Printf("    Small: %s\n", cp.DefaultSmallModelID)
+				if customProviders[i].DefaultSmallModelID != "" {
+					fmt.Printf("    Small: %s\n", customProviders[i].DefaultSmallModelID)
 				}
-				fmt.Printf("    API: %s\n", cp.APIEndpoint)
-				fmt.Printf("    Models: %d\n", len(cp.Models))
+				fmt.Printf("    API: %s\n", customProviders[i].APIEndpoint)
+				fmt.Printf("    Models: %d\n", len(customProviders[i].Models))
 			}
 			fmt.Printf("\nCustom providers: %d\n", len(customProviders))
 		} else {
@@ -212,15 +213,15 @@ func runProvidersShow(cmd *cobra.Command, args []string) error {
 
 	// Display models.
 	fmt.Printf("\nModels (%d):\n", len(foundProvider.Models))
-	for _, model := range foundProvider.Models {
-		fmt.Printf("  %s\n", model.Name)
-		fmt.Printf("    ID: %s\n", model.ID)
-		fmt.Printf("    Context: %d tokens\n", model.ContextWindow)
-		if model.DefaultMaxTokens > 0 {
-			fmt.Printf("    Max Tokens: %d\n", model.DefaultMaxTokens)
+	for i := range foundProvider.Models {
+		fmt.Printf("  %s\n", foundProvider.Models[i].Name)
+		fmt.Printf("    ID: %s\n", foundProvider.Models[i].ID)
+		fmt.Printf("    Context: %d tokens\n", foundProvider.Models[i].ContextWindow)
+		if foundProvider.Models[i].DefaultMaxTokens > 0 {
+			fmt.Printf("    Max Tokens: %d\n", foundProvider.Models[i].DefaultMaxTokens)
 		}
-		if model.CostPer1MIn > 0 || model.CostPer1MOut > 0 {
-			fmt.Printf("    Cost: $%.2f / 1M in, $%.2f / 1M out\n", model.CostPer1MIn, model.CostPer1MOut)
+		if foundProvider.Models[i].CostPer1MIn > 0 || foundProvider.Models[i].CostPer1MOut > 0 {
+			fmt.Printf("    Cost: $%.2f / 1M in, $%.2f / 1M out\n", foundProvider.Models[i].CostPer1MIn, foundProvider.Models[i].CostPer1MOut)
 		}
 	}
 
@@ -303,9 +304,9 @@ func runProvidersAddTemplate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Parse flags.
-	customID, _ := cmd.Flags().GetString("id")
-	customName, _ := cmd.Flags().GetString("name")
-	varValues, _ := cmd.Flags().GetStringSlice("var")
+	customID, _ := cmd.Flags().GetString("id")        //nolint:errcheck // Flag is defined.
+	customName, _ := cmd.Flags().GetString("name")    //nolint:errcheck // Flag is defined.
+	varValues, _ := cmd.Flags().GetStringSlice("var") //nolint:errcheck // Flag is defined.
 
 	// Parse variable values.
 	vars := make(map[string]string)
@@ -456,11 +457,11 @@ func runProvidersAddURL(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Fetching providers from %s...\n", url)
 
 	// Fetch the URL.
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) //nolint:gosec // URL is user-provided, expected behavior.
 	if err != nil {
 		return fmt.Errorf("fetching URL: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // Error on close is not actionable.
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
@@ -632,7 +633,7 @@ func newProvidersValidateCmd() *cobra.Command {
 
 // runProvidersValidate executes the providers validate command.
 func runProvidersValidate(cmd *cobra.Command, args []string) error {
-	verbose, _ := cmd.Flags().GetBool("verbose")
+	verbose, _ := cmd.Flags().GetBool("verbose") //nolint:errcheck // Flag is defined.
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -657,17 +658,17 @@ func runProvidersValidate(cmd *cobra.Command, args []string) error {
 	allValid := true
 	existingIDs := make([]string, 0, len(customProviders))
 
-	for _, provider := range customProviders {
+	for i := range customProviders {
 		// Collect existing IDs for uniqueness validation.
-		existingIDs = append(existingIDs, provider.ID)
+		existingIDs = append(existingIDs, customProviders[i].ID)
 
 		// Validate the provider.
-		result := config.ValidateCustomProvider(&provider, existingIDs)
+		result := config.ValidateCustomProvider(&customProviders[i], existingIDs)
 
 		if result.IsValid {
-			fmt.Printf("✓ %s (%s)\n", provider.Name, provider.ID)
+			fmt.Printf("✓ %s (%s)\n", customProviders[i].Name, customProviders[i].ID)
 		} else {
-			fmt.Printf("✗ %s (%s)\n", provider.Name, provider.ID)
+			fmt.Printf("✗ %s (%s)\n", customProviders[i].Name, customProviders[i].ID)
 			allValid = false
 		}
 
@@ -740,11 +741,50 @@ func runProvidersTemplates(cmd *cobra.Command, args []string) error {
 // getExistingProviderIDs returns all existing provider IDs (both catwalk and custom).
 func getExistingProviderIDs(cfg *config.Config) []string {
 	loader := config.NewProviderLoader(cfg.DataDir())
-	allProviders, _ := loader.LoadAllProviders(cfg)
+	allProviders, _ := loader.LoadAllProviders(cfg) //nolint:errcheck // Best effort, empty slice is acceptable on error.
 
 	ids := make([]string, 0, len(allProviders))
-	for _, p := range allProviders {
-		ids = append(ids, string(p.ID))
+	for i := range allProviders {
+		ids = append(ids, string(allProviders[i].ID))
 	}
 	return ids
+}
+
+// importProvidersFromFile imports providers from a CustomProvidersFile.
+// It validates each provider, skips duplicates, and adds valid providers.
+// Returns the count of providers added.
+func importProvidersFromFile(file config.CustomProvidersFile, cfg *config.Config) int {
+	existingProviders := getExistingProviderIDs(cfg)
+	loader := config.NewProviderLoader(cfg.DataDir())
+	manager := loader.GetCustomProviderManager()
+
+	addedCount := 0
+	for i := range file.Providers {
+		// Validate.
+		result := config.ValidateCustomProvider(&file.Providers[i], existingProviders)
+		if !result.IsValid {
+			fmt.Printf("Skipping %s: validation failed\n", file.Providers[i].ID)
+			for _, e := range result.Errors {
+				fmt.Printf("  - %s\n", e)
+			}
+			continue
+		}
+
+		// Add if not duplicate.
+		if manager.Exists(file.Providers[i].ID) {
+			fmt.Printf("Skipping %s: already exists\n", file.Providers[i].ID)
+			continue
+		}
+
+		if err := manager.Add(file.Providers[i]); err != nil {
+			fmt.Printf("Error adding %s: %v\n", file.Providers[i].ID, err)
+			continue
+		}
+
+		existingProviders = append(existingProviders, file.Providers[i].ID)
+		addedCount++
+		fmt.Printf("Added: %s (%s)\n", file.Providers[i].Name, file.Providers[i].ID)
+	}
+
+	return addedCount
 }
