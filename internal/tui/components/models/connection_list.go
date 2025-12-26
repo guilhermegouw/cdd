@@ -64,7 +64,7 @@ func (l *ConnectionList) Update(msg tea.Msg) (*ConnectionList, tea.Cmd) {
 			}
 			return l, nil
 
-		case "down", "j":
+		case keyDown, "j":
 			if l.cursor < len(l.connections)-1 {
 				l.cursor++
 			}

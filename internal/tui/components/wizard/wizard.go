@@ -85,7 +85,7 @@ func (w *Wizard) Init() tea.Cmd {
 func (w *Wizard) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	// Handle escape to go back.
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
-		if keyMsg.String() == "esc" {
+		if keyMsg.String() == keyEsc {
 			w.goBack()
 			return w, nil
 		}

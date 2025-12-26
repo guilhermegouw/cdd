@@ -110,9 +110,9 @@ func (c *CustomProviderModels) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	switch keyMsg.String() {
 	case keyEnter:
 		return c.handleEnter()
-	case "tab":
+	case keyTab:
 		return c.handleTab()
-	case "esc":
+	case keyEsc:
 		// Cancel adding this model.
 		return c.cancelModel()
 	}

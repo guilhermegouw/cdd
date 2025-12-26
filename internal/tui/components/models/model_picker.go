@@ -67,7 +67,7 @@ func (p *ModelPicker) Update(msg tea.Msg) (*ModelPicker, tea.Cmd) {
 			}
 			return p, nil
 
-		case "down", "j":
+		case keyDown, "j":
 			if p.cursor < len(p.models)-1 {
 				p.cursor++
 			}

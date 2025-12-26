@@ -61,7 +61,7 @@ func (a *APIKeyInput) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 					APIKey: value,
 				})
 			}
-		case "tab":
+		case keyTab:
 			// Toggle between password mode and visible mode.
 			if a.input.EchoMode == textinput.EchoPassword {
 				a.input.EchoMode = textinput.EchoNormal

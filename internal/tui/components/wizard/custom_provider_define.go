@@ -126,7 +126,7 @@ func (c *CustomProviderDefine) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	switch keyMsg.String() {
 	case keyEnter:
 		return c.handleEnter()
-	case "tab":
+	case keyTab:
 		return c.handleTab()
 	case keyUp:
 		if c.step == 2 { // Type selection
@@ -142,7 +142,7 @@ func (c *CustomProviderDefine) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 			}
 			c.typeInput.SetValue(string(c.providerTypes[c.typeIndex]))
 		}
-	case "esc":
+	case keyEsc:
 		// Cancel - go back without saving.
 		return c, nil
 	}

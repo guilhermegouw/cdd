@@ -107,7 +107,7 @@ func (f *ConnectionForm) Update(msg tea.Msg) (*ConnectionForm, tea.Cmd) {
 
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch keyMsg.String() {
-		case "tab", "down":
+		case "tab", keyDown:
 			return f.nextField()
 		case "shift+tab", "up":
 			return f.prevField()

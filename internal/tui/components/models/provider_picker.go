@@ -48,7 +48,7 @@ func (p *ProviderPicker) Update(msg tea.Msg) (*ProviderPicker, tea.Cmd) {
 			}
 			return p, nil
 
-		case "down", "j":
+		case keyDown, "j":
 			if p.cursor < len(p.providers)-1 {
 				p.cursor++
 			}
