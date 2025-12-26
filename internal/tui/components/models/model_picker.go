@@ -73,7 +73,7 @@ func (p *ModelPicker) Update(msg tea.Msg) (*ModelPicker, tea.Cmd) {
 			}
 			return p, nil
 
-		case "enter":
+		case keyEnter:
 			if p.cursor >= 0 && p.cursor < len(p.models) && p.connection != nil {
 				model := p.models[p.cursor]
 				return p, util.CmdHandler(ModelSelectedMsg{

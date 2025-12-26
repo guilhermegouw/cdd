@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -68,6 +69,8 @@ func newProvidersListCmd() *cobra.Command {
 }
 
 // runProvidersList executes the providers list command.
+//
+//nolint:gocyclo // Complex function due to multiple provider type handling
 func runProvidersList(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
@@ -379,7 +382,7 @@ func runProvidersAddFile(cmd *cobra.Command, args []string) error {
 	}
 
 	// Read the file.
-	data, err := os.ReadFile(filePath)
+	data, err := os.ReadFile(filePath) //nolint:gosec // G304: User-provided file path is expected for CLI import command
 	if err != nil {
 		return fmt.Errorf("reading file: %w", err)
 	}
@@ -394,39 +397,7 @@ func runProvidersAddFile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no providers found in file")
 	}
 
-	// Get existing provider IDs for validation.
-	existingProviders := getExistingProviderIDs(cfg)
-	loader := config.NewProviderLoader(cfg.DataDir())
-	manager := loader.GetCustomProviderManager()
-
-	addedCount := 0
-	for _, provider := range file.Providers {
-		// Validate.
-		result := config.ValidateCustomProvider(&provider, existingProviders)
-		if !result.IsValid {
-			fmt.Printf("Skipping %s: validation failed\n", provider.ID)
-			for _, e := range result.Errors {
-				fmt.Printf("  - %s\n", e)
-			}
-			continue
-		}
-
-		// Add if not duplicate.
-		if manager.Exists(provider.ID) {
-			fmt.Printf("Skipping %s: already exists\n", provider.ID)
-			continue
-		}
-
-		if err := manager.Add(provider); err != nil {
-			fmt.Printf("Error adding %s: %v\n", provider.ID, err)
-			continue
-		}
-
-		existingProviders = append(existingProviders, provider.ID)
-		addedCount++
-		fmt.Printf("Added: %s (%s)\n", provider.Name, provider.ID)
-	}
-
+	addedCount := importProvidersFromFile(file, cfg)
 	fmt.Printf("\nAdded %d provider(s) from %s\n", addedCount, filePath)
 
 	return nil
@@ -457,7 +428,11 @@ func runProvidersAddURL(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Fetching providers from %s...\n", url)
 
 	// Fetch the URL.
-	resp, err := http.Get(url) //nolint:gosec // URL is user-provided, expected behavior.
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody) //nolint:gosec // URL is user-provided, expected behavior.
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("fetching URL: %w", err)
 	}
@@ -482,39 +457,7 @@ func runProvidersAddURL(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no providers found at URL")
 	}
 
-	// Get existing provider IDs for validation.
-	existingProviders := getExistingProviderIDs(cfg)
-	loader := config.NewProviderLoader(cfg.DataDir())
-	manager := loader.GetCustomProviderManager()
-
-	addedCount := 0
-	for _, provider := range file.Providers {
-		// Validate.
-		result := config.ValidateCustomProvider(&provider, existingProviders)
-		if !result.IsValid {
-			fmt.Printf("Skipping %s: validation failed\n", provider.ID)
-			for _, e := range result.Errors {
-				fmt.Printf("  - %s\n", e)
-			}
-			continue
-		}
-
-		// Add if not duplicate.
-		if manager.Exists(provider.ID) {
-			fmt.Printf("Skipping %s: already exists\n", provider.ID)
-			continue
-		}
-
-		if err := manager.Add(provider); err != nil {
-			fmt.Printf("Error adding %s: %v\n", provider.ID, err)
-			continue
-		}
-
-		existingProviders = append(existingProviders, provider.ID)
-		addedCount++
-		fmt.Printf("Added: %s (%s)\n", provider.Name, provider.ID)
-	}
-
+	addedCount := importProvidersFromFile(file, cfg)
 	fmt.Printf("\nAdded %d provider(s) from URL\n", addedCount)
 
 	return nil
@@ -602,13 +545,13 @@ func runProvidersExport(cmd *cobra.Command, args []string) error {
 	customProvidersPath := manager.GetFilePath()
 
 	// Read the current custom providers file.
-	data, err := os.ReadFile(customProvidersPath)
+	data, err := os.ReadFile(customProvidersPath) //nolint:gosec // G304: Internal path from manager, not user input
 	if err != nil {
 		return fmt.Errorf("reading custom providers file: %w", err)
 	}
 
 	// Write to the output path.
-	if err := os.WriteFile(outputPath, data, 0o644); err != nil {
+	if err := os.WriteFile(outputPath, data, 0o644); err != nil { //nolint:gosec // G306: Export file should be readable by others
 		return fmt.Errorf("writing output file: %w", err)
 	}
 

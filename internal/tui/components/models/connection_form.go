@@ -22,16 +22,16 @@ const (
 
 // ConnectionForm is the form for adding/editing connections.
 type ConnectionForm struct {
-	nameInput   textinput.Model
-	apiKeyInput textinput.Model
-	focused     FormField
-	providerID  string
+	nameInput    textinput.Model
+	apiKeyInput  textinput.Model
+	focused      FormField
+	providerID   string
 	providerName string
 	providerType string
-	width       int
-	height      int
-	isEdit      bool
-	editID      string
+	width        int
+	height       int
+	isEdit       bool
+	editID       string
 }
 
 // NewConnectionForm creates a new ConnectionForm.
@@ -111,7 +111,7 @@ func (f *ConnectionForm) Update(msg tea.Msg) (*ConnectionForm, tea.Cmd) {
 			return f.nextField()
 		case "shift+tab", "up":
 			return f.prevField()
-		case "enter":
+		case keyEnter:
 			// Submit if on API key field.
 			if f.focused == FieldAPIKey {
 				name := strings.TrimSpace(f.nameInput.Value())

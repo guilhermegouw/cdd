@@ -71,6 +71,7 @@ func (s *StatusBar) View() string {
 
 	// Left side: model name or error
 	var left string
+	//nolint:gocritic // ifElseChain is clearer than switch for this mixed condition logic
 	if s.status == StatusError && s.errorMsg != "" {
 		// Truncate long error messages
 		errMsg := s.errorMsg

@@ -54,7 +54,7 @@ func (p *ProviderPicker) Update(msg tea.Msg) (*ProviderPicker, tea.Cmd) {
 			}
 			return p, nil
 
-		case "enter":
+		case keyEnter:
 			if p.cursor >= 0 && p.cursor < len(p.providers) {
 				provider := p.providers[p.cursor]
 				return p, util.CmdHandler(ProviderSelectedMsg{

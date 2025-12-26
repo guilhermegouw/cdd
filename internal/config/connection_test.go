@@ -256,7 +256,7 @@ func TestMigrateToConnections(t *testing.T) {
 	// Create a temporary directory for the config.
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, "cdd")
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
+	if err := os.MkdirAll(configDir, 0o750); err != nil { //nolint:gosec // G301: Test directory, more permissive is acceptable
 		t.Fatalf("Failed to create config dir: %v", err)
 	}
 

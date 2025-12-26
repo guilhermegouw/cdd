@@ -80,7 +80,7 @@ func (p *TodoPanel) View() string {
 	}
 
 	t := styles.CurrentTheme()
-	var lines []string
+	lines := make([]string, 0, len(p.todos)+1) // Pre-allocate for header + todos
 
 	// Header
 	headerStyle := t.S().Muted.Bold(true)

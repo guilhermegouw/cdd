@@ -344,7 +344,7 @@ func TestValidationResult_Error(t *testing.T) {
 func TestValidationResult_Error_Valid(t *testing.T) {
 	result := &ValidationResult{
 		IsValid: true,
-		Errors:   []ValidationError{},
+		Errors:  []ValidationError{},
 	}
 
 	err := result.Error()

@@ -98,6 +98,8 @@ func (m *Model) Init() tea.Cmd {
 }
 
 // Update handles messages.
+//
+//nolint:gocyclo // TUI update handler requires handling many message types
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Log all incoming messages for debugging
 	switch msg := msg.(type) {

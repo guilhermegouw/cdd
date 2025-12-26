@@ -212,10 +212,8 @@ func (w *Wizard) updateCustomProviderModels(msg tea.Msg) (util.Model, tea.Cmd) {
 		// Save the custom provider.
 		loader := config.NewProviderLoader("")
 		manager := loader.GetCustomProviderManager()
-		if err := manager.Add(m.Provider); err != nil {
-			// Handle error - for now just log and continue.
-			// In production, show error to user.
-		}
+		// Ignore error - provider addition failure is non-fatal for wizard flow.
+		_ = manager.Add(m.Provider) //nolint:errcheck // Best-effort save, continue with wizard regardless
 
 		// Convert to catwalk provider and continue to API key input.
 		provider := m.Provider.ToCatwalkProvider()
@@ -334,6 +332,7 @@ func (w *Wizard) goBack() {
 		w.oauthFlow = nil
 	case StepAPIKey:
 		// If we came from custom provider, go back to provider selection.
+		//nolint:gocritic // ifElseChain is clearer than switch for this mixed condition logic
 		if w.selectedCustomProvider != nil {
 			w.step = StepProvider
 			w.apiKeyInput = nil

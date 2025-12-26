@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
-	"github.com/charmbracelet/catwalk/pkg/embedded"
 )
 
 // ProviderLoader combines multiple provider sources.
@@ -122,17 +121,6 @@ func (pl *ProviderLoader) UpdateProviders(cfg *Config, source string) error {
 // GetCustomProviderManager returns the custom provider manager.
 func (pl *ProviderLoader) GetCustomProviderManager() *CustomProviderManager {
 	return pl.customManager
-}
-
-// loadProvidersFromCatwalk loads providers directly from catwalk API.
-func (pl *ProviderLoader) loadProvidersFromCatwalk() ([]catwalk.Provider, error) {
-	client := catwalk.NewWithURL(pl.catwalkURL)
-	return client.GetProviders()
-}
-
-// loadEmbeddedProviders loads the embedded provider list.
-func (pl *ProviderLoader) loadEmbeddedProviders() []catwalk.Provider {
-	return embedded.GetAll()
 }
 
 // getProvidersCachePath returns the path to the providers cache file.

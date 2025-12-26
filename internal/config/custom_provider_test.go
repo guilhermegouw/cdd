@@ -356,11 +356,11 @@ func TestCustomProviderToCatwalkProvider(t *testing.T) {
 func TestCustomProviderToCatwalkProvider_BaseURLFallback(t *testing.T) {
 	// Test that BaseURL is used when APIEndpoint is empty.
 	customProvider := CustomProvider{
-		Name:        "Test Provider",
-		ID:          "test-provider",
-		Type:        catwalk.TypeOpenAICompat,
-		BaseURL:     "https://api.example.com/v1",
-		Models:      []catwalk.Model{},
+		Name:    "Test Provider",
+		ID:      "test-provider",
+		Type:    catwalk.TypeOpenAICompat,
+		BaseURL: "https://api.example.com/v1",
+		Models:  []catwalk.Model{},
 	}
 
 	catwalkProvider := customProvider.ToCatwalkProvider()

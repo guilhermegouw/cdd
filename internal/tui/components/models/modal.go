@@ -34,20 +34,20 @@ const (
 
 // Modal is the models/connections management modal.
 type Modal struct {
-	cfg             *config.Config
-	connManager     *config.ConnectionManager
-	connectionList  *ConnectionList
-	providerPicker  *ProviderPicker
-	connectionForm  *ConnectionForm
-	modelPicker     *ModelPicker
-	step            ModalStep
-	visible         bool
-	width           int
-	height          int
-	selectedTier    config.SelectedModelType
-	deleteTargetID  string
-	editTargetID    string
-	selectedConn    *config.Connection
+	cfg            *config.Config
+	connManager    *config.ConnectionManager
+	connectionList *ConnectionList
+	providerPicker *ProviderPicker
+	connectionForm *ConnectionForm
+	modelPicker    *ModelPicker
+	step           ModalStep
+	visible        bool
+	width          int
+	height         int
+	selectedTier   config.SelectedModelType
+	deleteTargetID string
+	editTargetID   string
+	selectedConn   *config.Connection
 }
 
 // New creates a new Modal.
@@ -285,7 +285,7 @@ func (m *Modal) updateEdit(msg tea.Msg) (*Modal, tea.Cmd) {
 func (m *Modal) updateDeleteConfirm(msg tea.Msg) (*Modal, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch keyMsg.String() {
-		case "y", "Y", "enter":
+		case "y", "Y", keyEnter:
 			// Confirm delete.
 			if err := m.connManager.Delete(m.deleteTargetID); err != nil {
 				return m, util.ReportError(err)

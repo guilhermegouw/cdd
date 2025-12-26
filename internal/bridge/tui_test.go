@@ -310,10 +310,22 @@ func TestTUIBridgeConcurrentPublish(t *testing.T) {
 		authSub := hub.Auth.Subscribe(ctx)
 
 		// Drain subscribers in background
-		go func() { for range agentSub { } }()   //nolint:revive // empty block for draining
-		go func() { for range toolSub { } }()    //nolint:revive // empty block for draining
-		go func() { for range sessionSub { } }() //nolint:revive // empty block for draining
-		go func() { for range authSub { } }()    //nolint:revive // empty block for draining
+		go func() {
+			for range agentSub {
+			}
+		}() //nolint:revive // empty block for draining
+		go func() {
+			for range toolSub {
+			}
+		}() //nolint:revive // empty block for draining
+		go func() {
+			for range sessionSub {
+			}
+		}() //nolint:revive // empty block for draining
+		go func() {
+			for range authSub {
+			}
+		}() //nolint:revive // empty block for draining
 
 		// Publish events concurrently from all brokers
 		var wg sync.WaitGroup

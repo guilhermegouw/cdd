@@ -13,14 +13,14 @@ import (
 
 // ConnectionList displays the list of connections.
 type ConnectionList struct {
-	connManager    *config.ConnectionManager
-	cfg            *config.Config
-	connections    []config.Connection
-	cursor         int
-	width          int
-	height         int
-	activeConnLg   string // Connection ID for large model
-	activeConnSm   string // Connection ID for small model
+	connManager  *config.ConnectionManager
+	cfg          *config.Config
+	connections  []config.Connection
+	cursor       int
+	width        int
+	height       int
+	activeConnLg string // Connection ID for large model
+	activeConnSm string // Connection ID for small model
 }
 
 // NewConnectionList creates a new ConnectionList.
@@ -91,7 +91,7 @@ func (l *ConnectionList) Update(msg tea.Msg) (*ConnectionList, tea.Cmd) {
 		case "s":
 			return l, util.CmdHandler(SelectSmallModelMsg{})
 
-		case "enter":
+		case keyEnter:
 			if len(l.connections) > 0 {
 				return l, util.CmdHandler(ConnectionSelectedMsg{Connection: l.connections[l.cursor]})
 			}

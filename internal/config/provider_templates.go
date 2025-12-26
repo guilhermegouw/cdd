@@ -7,16 +7,16 @@ import (
 
 // ProviderTemplate defines a pre-built provider configuration template.
 type ProviderTemplate struct {
-	Name            string
-	ID              string
-	Type            catwalk.Type
-	APIEndpoint     string
-	DefaultHeaders  map[string]string
+	Name                string
+	ID                  string
+	Type                catwalk.Type
+	APIEndpoint         string
+	DefaultHeaders      map[string]string
 	DefaultLargeModelID string
 	DefaultSmallModelID string
-	DefaultModels   []catwalk.Model
-	Description     string
-	Variables       []TemplateVariable
+	DefaultModels       []catwalk.Model
+	Description         string
+	Variables           []TemplateVariable
 }
 
 // TemplateVariable defines a variable that can be customized in a template.
@@ -31,35 +31,35 @@ type TemplateVariable struct {
 func ProviderTemplates() map[string]ProviderTemplate {
 	return map[string]ProviderTemplate{
 		"ollama": {
-			Name:        "Ollama",
-			ID:          "ollama",
-			Type:        catwalk.TypeOpenAICompat,
-			APIEndpoint: "http://localhost:11434/v1",
+			Name:                "Ollama",
+			ID:                  "ollama",
+			Type:                catwalk.TypeOpenAICompat,
+			APIEndpoint:         "http://localhost:11434/v1",
 			DefaultLargeModelID: "qwen2.5:32b",
 			DefaultSmallModelID: "qwen2.5:7b",
 			DefaultModels: []catwalk.Model{
 				{
-					ID:            "qwen2.5:32b",
-					Name:          "Qwen 2.5 32B",
-					ContextWindow: 32768,
+					ID:               "qwen2.5:32b",
+					Name:             "Qwen 2.5 32B",
+					ContextWindow:    32768,
 					DefaultMaxTokens: 8192,
 				},
 				{
-					ID:            "qwen2.5:7b",
-					Name:          "Qwen 2.5 7B",
-					ContextWindow: 32768,
+					ID:               "qwen2.5:7b",
+					Name:             "Qwen 2.5 7B",
+					ContextWindow:    32768,
 					DefaultMaxTokens: 4096,
 				},
 				{
-					ID:            "llama3.3:70b",
-					Name:          "Llama 3.3 70B",
-					ContextWindow: 128000,
+					ID:               "llama3.3:70b",
+					Name:             "Llama 3.3 70B",
+					ContextWindow:    128000,
 					DefaultMaxTokens: 8192,
 				},
 				{
-					ID:            "llama3.3:8b",
-					Name:          "Llama 3.3 8B",
-					ContextWindow: 128000,
+					ID:               "llama3.3:8b",
+					Name:             "Llama 3.3 8B",
+					ContextWindow:    128000,
 					DefaultMaxTokens: 4096,
 				},
 			},
@@ -74,23 +74,23 @@ func ProviderTemplates() map[string]ProviderTemplate {
 			},
 		},
 		"lmstudio": {
-			Name:        "LM Studio",
-			ID:          "lmstudio",
-			Type:        catwalk.TypeOpenAICompat,
-			APIEndpoint: "http://localhost:1234/v1",
+			Name:                "LM Studio",
+			ID:                  "lmstudio",
+			Type:                catwalk.TypeOpenAICompat,
+			APIEndpoint:         "http://localhost:1234/v1",
 			DefaultLargeModelID: "qwen2.5-32b-instruct",
 			DefaultSmallModelID: "qwen2.5-7b-instruct",
 			DefaultModels: []catwalk.Model{
 				{
-					ID:            "qwen2.5-32b-instruct",
-					Name:          "Qwen 2.5 32B Instruct",
-					ContextWindow: 32768,
+					ID:               "qwen2.5-32b-instruct",
+					Name:             "Qwen 2.5 32B Instruct",
+					ContextWindow:    32768,
 					DefaultMaxTokens: 8192,
 				},
 				{
-					ID:            "qwen2.5-7b-instruct",
-					Name:          "Qwen 2.5 7B Instruct",
-					ContextWindow: 32768,
+					ID:               "qwen2.5-7b-instruct",
+					Name:             "Qwen 2.5 7B Instruct",
+					ContextWindow:    32768,
 					DefaultMaxTokens: 4096,
 				},
 			},
@@ -115,7 +115,7 @@ func ProviderTemplates() map[string]ProviderTemplate {
 			},
 			DefaultLargeModelID: "anthropic/claude-sonnet-4",
 			DefaultSmallModelID: "anthropic/claude-3.5-haiku",
-			Description: "OpenRouter - API for accessing many LLMs",
+			Description:         "OpenRouter - API for accessing many LLMs",
 			Variables: []TemplateVariable{
 				{
 					Name:         "api_key",
@@ -126,36 +126,36 @@ func ProviderTemplates() map[string]ProviderTemplate {
 			},
 		},
 		"together": {
-			Name:        "Together AI",
-			ID:          "together",
-			Type:        catwalk.TypeOpenAICompat,
-			APIEndpoint: "https://api.together.xyz/v1",
+			Name:                "Together AI",
+			ID:                  "together",
+			Type:                catwalk.TypeOpenAICompat,
+			APIEndpoint:         "https://api.together.xyz/v1",
 			DefaultLargeModelID: "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo",
 			DefaultSmallModelID: "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
 			DefaultModels: []catwalk.Model{
 				{
-					ID:            "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo",
-					Name:          "Llama 3.1 405B Instruct Turbo",
-					ContextWindow: 131072,
+					ID:               "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo",
+					Name:             "Llama 3.1 405B Instruct Turbo",
+					ContextWindow:    131072,
 					DefaultMaxTokens: 4096,
-					CostPer1MIn:    3.0,
-					CostPer1MOut:   3.0,
+					CostPer1MIn:      3.0,
+					CostPer1MOut:     3.0,
 				},
 				{
-					ID:            "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
-					Name:          "Llama 3.1 8B Instruct Turbo",
-					ContextWindow: 131072,
+					ID:               "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
+					Name:             "Llama 3.1 8B Instruct Turbo",
+					ContextWindow:    131072,
 					DefaultMaxTokens: 4096,
-					CostPer1MIn:    0.20,
-					CostPer1MOut:   0.20,
+					CostPer1MIn:      0.20,
+					CostPer1MOut:     0.20,
 				},
 				{
-					ID:            "mistralai/Mixtral-8x7B-Instruct-v0.1",
-					Name:          "Mixtral 8x7B Instruct",
-					ContextWindow: 32768,
+					ID:               "mistralai/Mixtral-8x7B-Instruct-v0.1",
+					Name:             "Mixtral 8x7B Instruct",
+					ContextWindow:    32768,
 					DefaultMaxTokens: 4096,
-					CostPer1MIn:    0.30,
-					CostPer1MOut:   0.30,
+					CostPer1MIn:      0.30,
+					CostPer1MOut:     0.30,
 				},
 			},
 			Description: "Together AI - Fast inference for open-source models",
@@ -169,31 +169,31 @@ func ProviderTemplates() map[string]ProviderTemplate {
 			},
 		},
 		"deepseek": {
-			Name:        "DeepSeek",
-			ID:          "deepseek-custom",
-			Type:        catwalk.TypeOpenAICompat,
-			APIEndpoint: "https://api.deepseek.com/v1",
+			Name:                "DeepSeek",
+			ID:                  "deepseek-custom",
+			Type:                catwalk.TypeOpenAICompat,
+			APIEndpoint:         "https://api.deepseek.com/v1",
 			DefaultLargeModelID: "deepseek-reasoner",
 			DefaultSmallModelID: "deepseek-chat",
 			DefaultModels: []catwalk.Model{
 				{
-					ID:            "deepseek-reasoner",
-					Name:          "DeepSeek Reasoner",
-					ContextWindow: 64000,
-					DefaultMaxTokens: 8192,
-					CostPer1MIn:    0.57,
-					CostPer1MOut:   0.57,
-					CostPer1MInCached: 0.14,
+					ID:                 "deepseek-reasoner",
+					Name:               "DeepSeek Reasoner",
+					ContextWindow:      64000,
+					DefaultMaxTokens:   8192,
+					CostPer1MIn:        0.57,
+					CostPer1MOut:       0.57,
+					CostPer1MInCached:  0.14,
 					CostPer1MOutCached: 0.57,
 				},
 				{
-					ID:            "deepseek-chat",
-					Name:          "DeepSeek Chat",
-					ContextWindow: 64000,
-					DefaultMaxTokens: 8192,
-					CostPer1MIn:    0.14,
-					CostPer1MOut:   0.28,
-					CostPer1MInCached: 0.014,
+					ID:                 "deepseek-chat",
+					Name:               "DeepSeek Chat",
+					ContextWindow:      64000,
+					DefaultMaxTokens:   8192,
+					CostPer1MIn:        0.14,
+					CostPer1MOut:       0.28,
+					CostPer1MInCached:  0.014,
 					CostPer1MOutCached: 0.28,
 				},
 			},
@@ -208,29 +208,29 @@ func ProviderTemplates() map[string]ProviderTemplate {
 			},
 		},
 		"groq": {
-			Name:        "Groq",
-			ID:          "groq",
-			Type:        catwalk.TypeOpenAICompat,
-			APIEndpoint: "https://api.groq.com/openai/v1",
+			Name:                "Groq",
+			ID:                  "groq",
+			Type:                catwalk.TypeOpenAICompat,
+			APIEndpoint:         "https://api.groq.com/openai/v1",
 			DefaultLargeModelID: "llama-3.3-70b-versatile",
 			DefaultSmallModelID: "llama-3.3-8b-instant",
 			DefaultModels: []catwalk.Model{
 				{
-					ID:            "llama-3.3-70b-versatile",
-					Name:          "Llama 3.3 70B Versatile",
-					ContextWindow: 131072,
+					ID:               "llama-3.3-70b-versatile",
+					Name:             "Llama 3.3 70B Versatile",
+					ContextWindow:    131072,
 					DefaultMaxTokens: 8192,
 				},
 				{
-					ID:            "llama-3.3-8b-instant",
-					Name:          "Llama 3.3 8B Instant",
-					ContextWindow: 131072,
+					ID:               "llama-3.3-8b-instant",
+					Name:             "Llama 3.3 8B Instant",
+					ContextWindow:    131072,
 					DefaultMaxTokens: 4096,
 				},
 				{
-					ID:            "gemma2-9b-it",
-					Name:          "Gemma 2 9B IT",
-					ContextWindow: 8192,
+					ID:               "gemma2-9b-it",
+					Name:             "Gemma 2 9B IT",
+					ContextWindow:    8192,
 					DefaultMaxTokens: 4096,
 				},
 			},
@@ -254,7 +254,7 @@ func ProviderTemplates() map[string]ProviderTemplate {
 			},
 			DefaultLargeModelID: "claude-sonnet-4-5-20250929",
 			DefaultSmallModelID: "claude-3-5-haiku-20241022",
-			Description: "Generic Anthropic-compatible API (e.g., via proxy)",
+			Description:         "Generic Anthropic-compatible API (e.g., via proxy)",
 			Variables: []TemplateVariable{
 				{
 					Name:         "base_url",
@@ -271,23 +271,23 @@ func ProviderTemplates() map[string]ProviderTemplate {
 			},
 		},
 		"azure-openai": {
-			Name:        "Azure OpenAI",
-			ID:          "azure-openai",
-			Type:        catwalk.TypeAzure,
-			APIEndpoint: "", // User must provide this
+			Name:                "Azure OpenAI",
+			ID:                  "azure-openai",
+			Type:                catwalk.TypeAzure,
+			APIEndpoint:         "", // User must provide this
 			DefaultLargeModelID: "gpt-4o",
 			DefaultSmallModelID: "gpt-4o-mini",
 			DefaultModels: []catwalk.Model{
 				{
-					ID:            "gpt-4o",
-					Name:          "GPT-4o",
-					ContextWindow: 128000,
+					ID:               "gpt-4o",
+					Name:             "GPT-4o",
+					ContextWindow:    128000,
 					DefaultMaxTokens: 4096,
 				},
 				{
-					ID:            "gpt-4o-mini",
-					Name:          "GPT-4o Mini",
-					ContextWindow: 128000,
+					ID:               "gpt-4o-mini",
+					Name:             "GPT-4o Mini",
+					ContextWindow:    128000,
 					DefaultMaxTokens: 4096,
 				},
 			},
@@ -314,23 +314,23 @@ func ProviderTemplates() map[string]ProviderTemplate {
 			},
 		},
 		"vertexai": {
-			Name:        "Google Vertex AI",
-			ID:          "vertexai",
-			Type:        catwalk.TypeVertexAI,
-			APIEndpoint: "", // Configured via environment
+			Name:                "Google Vertex AI",
+			ID:                  "vertexai",
+			Type:                catwalk.TypeVertexAI,
+			APIEndpoint:         "", // Configured via environment
 			DefaultLargeModelID: "gemini-2.5-pro",
 			DefaultSmallModelID: "gemini-2.5-flash",
 			DefaultModels: []catwalk.Model{
 				{
-					ID:            "gemini-2.5-pro",
-					Name:          "Gemini 2.5 Pro",
-					ContextWindow: 1000000,
+					ID:               "gemini-2.5-pro",
+					Name:             "Gemini 2.5 Pro",
+					ContextWindow:    1000000,
 					DefaultMaxTokens: 8192,
 				},
 				{
-					ID:            "gemini-2.5-flash",
-					Name:          "Gemini 2.5 Flash",
-					ContextWindow: 1000000,
+					ID:               "gemini-2.5-flash",
+					Name:             "Gemini 2.5 Flash",
+					ContextWindow:    1000000,
 					DefaultMaxTokens: 8192,
 				},
 			},

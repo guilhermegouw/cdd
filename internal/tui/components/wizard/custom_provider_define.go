@@ -35,14 +35,14 @@ type CustomProviderDefine struct {
 	typeIndex     int
 
 	// Headers.
-	headers       map[string]string
+	headers        map[string]string
 	headerKeyInput textinput.Model
 	headerValInput textinput.Model
 	headerMode     bool // true when adding a header
 	headerIndex    int  // for editing existing headers
 
-	width          int
-	step           int // 0: name, 1: id, 2: type, 3: endpoint, 4: headers, 5: confirm
+	width int
+	step  int // 0: name, 1: id, 2: type, 3: endpoint, 4: headers, 5: confirm
 }
 
 // NewCustomProviderDefine creates a new custom provider definition component.
@@ -115,6 +115,8 @@ func (c *CustomProviderDefine) Init() tea.Cmd {
 }
 
 // Update handles messages.
+//
+//nolint:gocyclo // TUI update handler requires handling many message types
 func (c *CustomProviderDefine) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	keyMsg, ok := msg.(tea.KeyMsg)
 	if !ok {
@@ -253,12 +255,12 @@ func (c *CustomProviderDefine) buildProvider() config.CustomProvider {
 	providerType := catwalk.Type(c.typeInput.Value())
 
 	return config.CustomProvider{
-		Name:        strings.TrimSpace(c.nameInput.Value()),
-		ID:          strings.TrimSpace(c.idInput.Value()),
-		Type:        providerType,
-		APIEndpoint: strings.TrimSpace(c.apiEndpointInput.Value()),
+		Name:           strings.TrimSpace(c.nameInput.Value()),
+		ID:             strings.TrimSpace(c.idInput.Value()),
+		Type:           providerType,
+		APIEndpoint:    strings.TrimSpace(c.apiEndpointInput.Value()),
 		DefaultHeaders: c.headers,
-		Models:       []catwalk.Model{}, // Models will be added in next step.
+		Models:         []catwalk.Model{}, // Models will be added in next step.
 	}
 }
 

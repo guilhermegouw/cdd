@@ -90,12 +90,12 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 
 	// Define agent factory for TUI to reload agent on config changes.
 	agentFactory := func() (*agent.DefaultAgent, error) {
-		newCfg, err := config.Load()
-		if err != nil {
-			return nil, fmt.Errorf("loading config: %w", err)
+		newCfg, loadErr := config.Load()
+		if loadErr != nil {
+			return nil, fmt.Errorf("loading config: %w", loadErr)
 		}
-		ag, _, err := createAgent(newCfg, hub)
-		return ag, err
+		newAgent, _, createErr := createAgent(newCfg, hub)
+		return newAgent, createErr
 	}
 
 	// Define model factory for rebuilding model with fresh tokens.

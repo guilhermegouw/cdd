@@ -71,52 +71,30 @@ func SaveToFile(cfg *Config, path string) error {
 // SaveWizardResult saves the result of the setup wizard with API key authentication.
 // It saves to the Connections system (not legacy Providers).
 func SaveWizardResult(providerID, apiKey, largeModel, smallModel string) error {
-	cfg := NewConfig()
-
-	// Create a connection for this provider.
-	connManager := NewConnectionManager(cfg)
 	conn := Connection{
-		Name:       providerID, // Use provider ID as default name
+		Name:       providerID,
 		ProviderID: providerID,
 		APIKey:     apiKey,
 	}
-	if err := connManager.Add(conn); err != nil {
-		return fmt.Errorf("adding connection: %w", err)
-	}
-
-	// Get the connection ID (Add generates it).
-	addedConn := connManager.GetByName(providerID)
-	if addedConn == nil {
-		return fmt.Errorf("failed to retrieve added connection")
-	}
-
-	// Set model selections with ConnectionID.
-	cfg.Models[SelectedModelTypeLarge] = SelectedModel{
-		Model:        largeModel,
-		Provider:     providerID,
-		ConnectionID: addedConn.ID,
-	}
-	cfg.Models[SelectedModelTypeSmall] = SelectedModel{
-		Model:        smallModel,
-		Provider:     providerID,
-		ConnectionID: addedConn.ID,
-	}
-
-	return Save(cfg)
+	return saveWizardConnection(conn, providerID, largeModel, smallModel)
 }
 
 // SaveWizardResultWithOAuth saves the result of the setup wizard with OAuth authentication.
 // It saves to the Connections system (not legacy Providers).
 func SaveWizardResultWithOAuth(providerID string, token *oauth.Token, largeModel, smallModel string) error {
-	cfg := NewConfig()
-
-	// Create a connection for this provider with OAuth token.
-	connManager := NewConnectionManager(cfg)
 	conn := Connection{
-		Name:       providerID, // Use provider ID as default name
+		Name:       providerID,
 		ProviderID: providerID,
 		OAuthToken: token,
 	}
+	return saveWizardConnection(conn, providerID, largeModel, smallModel)
+}
+
+// saveWizardConnection is a helper that saves a connection and sets model selections.
+func saveWizardConnection(conn Connection, providerID, largeModel, smallModel string) error {
+	cfg := NewConfig()
+
+	connManager := NewConnectionManager(cfg)
 	if err := connManager.Add(conn); err != nil {
 		return fmt.Errorf("adding connection: %w", err)
 	}

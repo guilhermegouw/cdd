@@ -28,12 +28,12 @@ type CustomProviderModels struct {
 	provider config.CustomProvider
 
 	// Input fields for model.
-	modelNameInput    textinput.Model
-	modelIDInput      textinput.Model
-	contextInput      textinput.Model
-	costInInput       textinput.Model
-	costOutInput      textinput.Model
-	maxTokensInput    textinput.Model
+	modelNameInput textinput.Model
+	modelIDInput   textinput.Model
+	contextInput   textinput.Model
+	costInInput    textinput.Model
+	costOutInput   textinput.Model
+	maxTokensInput textinput.Model
 
 	// State.
 	models    []catwalk.Model
@@ -81,17 +81,17 @@ func NewCustomProviderModels(provider config.CustomProvider) *CustomProviderMode
 	maxTokensInput.SetValue("4096")
 
 	return &CustomProviderModels{
-		provider:         provider,
-		modelNameInput:   modelNameInput,
-		modelIDInput:     modelIDInput,
-		contextInput:     contextInput,
-		costInInput:      costInInput,
-		costOutInput:     costOutInput,
-		maxTokensInput:   maxTokensInput,
-		models:           []catwalk.Model{},
-		step:             0,
-		editIndex:        -1,
-		width:            70,
+		provider:       provider,
+		modelNameInput: modelNameInput,
+		modelIDInput:   modelIDInput,
+		contextInput:   contextInput,
+		costInInput:    costInInput,
+		costOutInput:   costOutInput,
+		maxTokensInput: maxTokensInput,
+		models:         []catwalk.Model{},
+		step:           0,
+		editIndex:      -1,
+		width:          70,
 	}
 }
 
@@ -189,12 +189,13 @@ func (c *CustomProviderModels) handleEnter() (util.Model, tea.Cmd) {
 }
 
 func (c *CustomProviderModels) handleTab() (util.Model, tea.Cmd) {
-	if c.step == 6 {
+	switch c.step {
+	case 6:
 		// Skip to finish if we have at least one model.
 		if len(c.models) > 0 {
 			c.step = 7
 		}
-	} else if c.step == 7 {
+	case 7:
 		c.step = 6
 	}
 	return c, nil
@@ -233,14 +234,14 @@ func (c *CustomProviderModels) buildModel() catwalk.Model {
 	}
 
 	return catwalk.Model{
-		ID:                   strings.TrimSpace(c.modelIDInput.Value()),
-		Name:                 strings.TrimSpace(c.modelNameInput.Value()),
-		ContextWindow:        contextWindow,
-		CostPer1MIn:          costIn,
-		CostPer1MOut:         costOut,
-		CostPer1MInCached:    costIn * 0.1, // Default cached to 10% of input cost
-		CostPer1MOutCached:   costOut,
-		DefaultMaxTokens:     maxTokens,
+		ID:                 strings.TrimSpace(c.modelIDInput.Value()),
+		Name:               strings.TrimSpace(c.modelNameInput.Value()),
+		ContextWindow:      contextWindow,
+		CostPer1MIn:        costIn,
+		CostPer1MOut:       costOut,
+		CostPer1MInCached:  costIn * 0.1, // Default cached to 10% of input cost
+		CostPer1MOutCached: costOut,
+		DefaultMaxTokens:   maxTokens,
 	}
 }
 

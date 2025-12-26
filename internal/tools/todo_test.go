@@ -287,12 +287,12 @@ func TestTodoStore_ConcurrentAccess(t *testing.T) {
 	// Concurrent writes
 	for i := 0; i < iterations; i++ {
 		wg.Add(1)
-		go func(n int) {
+		go func() {
 			defer wg.Done()
 			store.Set(sessionID, []TodoItem{
 				{Content: "Task", ActiveForm: "Task", Status: TodoStatusPending},
 			})
-		}(i)
+		}()
 	}
 
 	// Concurrent reads

@@ -36,6 +36,8 @@ type ValidationResult struct {
 }
 
 // ValidateCustomProvider validates a custom provider configuration.
+//
+//nolint:gocyclo // Validation logic is inherently complex with many checks
 func ValidateCustomProvider(p *CustomProvider, existingProviderIDs []string) *ValidationResult {
 	result := &ValidationResult{
 		IsValid:  true,
@@ -71,7 +73,7 @@ func ValidateCustomProvider(p *CustomProvider, existingProviderIDs []string) *Va
 	// Validate provider type is supported.
 	if p.Type != "" && !isValidProviderType(p.Type) {
 		result.Errors = append(result.Errors, ValidationError{
-			Field:   "type",
+			Field: "type",
 			Message: fmt.Sprintf("unsupported provider type %q, must be one of: anthropic, openai, openai-compat, google, azure, bedrock, vertexai, openrouter",
 				p.Type),
 		})
