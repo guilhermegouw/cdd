@@ -32,6 +32,7 @@ type SelectedModel struct {
 	FrequencyPenalty *float64       `json:"frequency_penalty,omitempty"`
 	PresencePenalty  *float64       `json:"presence_penalty,omitempty"`
 	TopK             *int64         `json:"top_k,omitempty"`
+	ConnectionID     string         `json:"connection_id,omitempty"`
 	Model            string         `json:"model"`
 	Provider         string         `json:"provider"`
 	ReasoningEffort  string         `json:"reasoning_effort,omitempty"`
@@ -75,6 +76,7 @@ func (pc *ProviderConfig) SetupClaudeCode() {
 type Config struct {
 	Models         map[SelectedModelType]SelectedModel `json:"models"`
 	Providers      map[string]*ProviderConfig          `json:"providers"`
+	Connections    []Connection                        `json:"connections,omitempty"`
 	Options        *Options                            `json:"options,omitempty"`
 	knownProviders []catwalk.Provider
 }

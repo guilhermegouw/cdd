@@ -5,7 +5,10 @@ import (
 )
 
 // IsFirstRun checks if this is the first time running CDD.
-// Returns true if no config file exists or if no providers have API keys.
+// Returns true if no config file exists or if no connections are configured.
+//
+// The system uses Connections as the single source of truth for authentication.
+// Legacy Providers data is automatically migrated to Connections on load.
 func IsFirstRun() bool {
 	// Check if global config file exists.
 	configPath := GlobalConfigPath()
@@ -13,21 +16,21 @@ func IsFirstRun() bool {
 		return true
 	}
 
-	// Try to load config and check for valid providers.
+	// Try to load config.
 	cfg, err := Load()
 	if err != nil {
-		// If config fails to load (e.g., no valid API keys), it's effectively first run.
+		// If config fails to load, it's effectively first run.
 		return true
 	}
 
-	// Check if any providers have API keys configured.
-	return !hasConfiguredProviders(cfg)
+	// Check if any connections are configured with authentication.
+	return !hasConfiguredConnections(cfg)
 }
 
-// hasConfiguredProviders checks if any providers have API keys set.
-func hasConfiguredProviders(cfg *Config) bool {
-	for _, provider := range cfg.Providers {
-		if provider.APIKey != "" && !provider.Disable {
+// hasConfiguredConnections checks if any connections have authentication configured.
+func hasConfiguredConnections(cfg *Config) bool {
+	for _, conn := range cfg.Connections {
+		if conn.IsConfigured() {
 			return true
 		}
 	}
@@ -47,10 +50,15 @@ func NeedsSetup() bool {
 		return true
 	}
 
-	// Check if the configured models reference valid providers.
+	// Check if the configured models reference valid connections.
+	connManager := NewConnectionManager(cfg)
 	for _, model := range cfg.Models {
-		provider, ok := cfg.Providers[model.Provider]
-		if !ok || provider.APIKey == "" || provider.Disable {
+		if model.ConnectionID == "" {
+			// No connection ID means this model hasn't been properly configured.
+			return true
+		}
+		conn := connManager.Get(model.ConnectionID)
+		if conn == nil || !conn.IsConfigured() {
 			return true
 		}
 	}

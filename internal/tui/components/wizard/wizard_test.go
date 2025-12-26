@@ -23,8 +23,8 @@ func TestNewWizard(t *testing.T) {
 		t.Errorf("initial step = %d, want %d", w.step, StepProvider)
 	}
 
-	if len(w.providers) != 2 {
-		t.Errorf("providers count = %d, want 2", len(w.providers))
+	if len(w.providers) != 3 {
+		t.Errorf("providers count = %d, want 3 (includes custom provider option)", len(w.providers))
 	}
 
 	if w.providerList == nil {

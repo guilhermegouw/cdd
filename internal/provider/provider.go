@@ -114,9 +114,47 @@ func (b *Builder) refreshExpiredTokens(ctx context.Context) error {
 
 // buildModel creates a Model from a selected model configuration.
 func (b *Builder) buildModel(ctx context.Context, modelCfg config.SelectedModel) (Model, error) {
-	providerCfg, ok := b.cfg.Providers[modelCfg.Provider]
+	// Determine which provider to use.
+	providerID := modelCfg.Provider
+
+	// If ConnectionID is set, get the provider from the connection.
+	var conn *config.Connection
+	if modelCfg.ConnectionID != "" {
+		connManager := config.NewConnectionManager(b.cfg)
+		conn = connManager.Get(modelCfg.ConnectionID)
+		if conn != nil {
+			providerID = conn.ProviderID
+		}
+	}
+
+	providerCfg, ok := b.cfg.Providers[providerID]
 	if !ok {
-		return Model{}, fmt.Errorf("provider %q not configured", modelCfg.Provider)
+		return Model{}, fmt.Errorf("provider %q not configured", providerID)
+	}
+
+	// If we have a connection, use its credentials instead of the provider's.
+	if conn != nil {
+		// Create a copy of the provider config with the connection's credentials.
+		providerCfgCopy := *providerCfg
+		if conn.APIKey != "" {
+			providerCfgCopy.APIKey = conn.APIKey
+		}
+		if conn.OAuthToken != nil {
+			providerCfgCopy.OAuthToken = conn.OAuthToken
+			providerCfgCopy.SetupClaudeCode()
+		}
+		if conn.BaseURL != "" {
+			providerCfgCopy.BaseURL = conn.BaseURL
+		}
+		if len(conn.ExtraHeaders) > 0 {
+			if providerCfgCopy.ExtraHeaders == nil {
+				providerCfgCopy.ExtraHeaders = make(map[string]string)
+			}
+			for k, v := range conn.ExtraHeaders {
+				providerCfgCopy.ExtraHeaders[k] = v
+			}
+		}
+		providerCfg = &providerCfgCopy
 	}
 
 	// Build or get cached fantasy provider.

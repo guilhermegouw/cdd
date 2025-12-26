@@ -6,17 +6,21 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/fantasy"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/catwalk/pkg/catwalk"
 
 	"github.com/guilhermegouw/cdd/internal/agent"
 	"github.com/guilhermegouw/cdd/internal/bridge"
+	"github.com/guilhermegouw/cdd/internal/config"
 	"github.com/guilhermegouw/cdd/internal/debug"
 	"github.com/guilhermegouw/cdd/internal/events"
 	"github.com/guilhermegouw/cdd/internal/pubsub"
 	"github.com/guilhermegouw/cdd/internal/tools"
+	"github.com/guilhermegouw/cdd/internal/tui/components/models"
 	"github.com/guilhermegouw/cdd/internal/tui/styles"
 	"github.com/guilhermegouw/cdd/internal/tui/util"
 )
@@ -56,30 +60,35 @@ type ModelFactory func() (fantasy.LanguageModel, error)
 
 // Model is the chat page model.
 type Model struct {
-	agent        *agent.DefaultAgent
-	agentFactory AgentFactory
-	modelFactory ModelFactory
-	messages     *MessageList
-	activity     *ActivityPanel
-	todoPanel    *TodoPanel
-	input        *Input
-	status       *StatusBar
-	program      *tea.Program
-	sessionID    string
-	isStreaming  bool
-	width        int
-	height       int
+	agent           *agent.DefaultAgent
+	agentFactory    AgentFactory
+	modelFactory    ModelFactory
+	commandRegistry *CommandRegistry
+	modelsModal     *models.Modal
+	messages        *MessageList
+	activity        *ActivityPanel
+	todoPanel       *TodoPanel
+	input           *Input
+	status          *StatusBar
+	program         *tea.Program
+	cfg             *config.Config
+	providers       []catwalk.Provider
+	sessionID       string
+	isStreaming     bool
+	width           int
+	height          int
 }
 
 // New creates a new chat page model.
 func New(ag *agent.DefaultAgent) *Model {
 	return &Model{
-		agent:     ag,
-		messages:  NewMessageList(),
-		activity:  NewActivityPanel(),
-		todoPanel: NewTodoPanel(),
-		input:     NewInput(),
-		status:    NewStatusBar(),
+		agent:           ag,
+		commandRegistry: NewCommandRegistry(),
+		messages:        NewMessageList(),
+		activity:        NewActivityPanel(),
+		todoPanel:       NewTodoPanel(),
+		input:           NewInput(),
+		status:          NewStatusBar(),
 	}
 }
 
@@ -101,6 +110,13 @@ func (m *Model) SetModelFactory(factory ModelFactory) {
 // SetModelName sets the model name to display in the status bar.
 func (m *Model) SetModelName(name string) {
 	m.status.SetModelName(name)
+}
+
+// SetConfig sets the config for the models modal.
+func (m *Model) SetConfig(cfg *config.Config, providers []catwalk.Provider) {
+	m.cfg = cfg
+	m.providers = providers
+	m.modelsModal = models.New(cfg, providers)
 }
 
 // isAuthError checks if the error is an authentication-related HTTP error.
@@ -137,6 +153,16 @@ func (m *Model) Init() tea.Cmd {
 //nolint:gocyclo // Complex due to handling many message types including mouse events
 func (m *Model) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	var cmds []tea.Cmd
+
+	// Route to modal if visible.
+	if m.modelsModal != nil && m.modelsModal.IsVisible() {
+		var cmd tea.Cmd
+		m.modelsModal, cmd = m.modelsModal.Update(msg)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return m, tea.Batch(cmds...)
+	}
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -257,6 +283,36 @@ func (m *Model) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 
 	case bridge.TodoEventMsg:
 		return m.handleTodoEvent(msg.Event)
+
+	case OpenModelsModalMsg:
+		if m.modelsModal == nil {
+			return m, util.ReportWarn("Models modal not configured. Please set config first.")
+		}
+		m.modelsModal.Show()
+		m.modelsModal.SetSize(m.width, m.height)
+		m.input.Disable()
+		return m, m.modelsModal.Init()
+
+	case models.ModalClosedMsg:
+		debug.Event("chat", "ModalClosedMsg", fmt.Sprintf("enabling input, width=%d height=%d", m.width, m.height))
+		m.input.Enable()
+		return m, m.input.Focus()
+
+	case models.ModelSwitchedMsg:
+		// Reload the model using modelFactory and swap it in the agent.
+		if m.modelFactory == nil {
+			return m, util.ReportError(fmt.Errorf("model factory not configured"))
+		}
+		newModel, err := m.modelFactory()
+		if err != nil {
+			return m, util.ReportError(fmt.Errorf("failed to load new model: %w", err))
+		}
+		m.agent.SetModel(newModel)
+		m.status.SetModelName(msg.ModelName)
+		return m, util.ReportSuccess(fmt.Sprintf("Switched to %s", msg.ModelName))
+
+	case UnknownCommandMsg:
+		return m, util.ReportWarn(fmt.Sprintf("Unknown command: /%s", msg.Command))
 	}
 
 	// Update messages (for viewport scrolling)
@@ -286,6 +342,12 @@ func (m *Model) handleKey(msg tea.KeyMsg) (util.Model, tea.Cmd) {
 		value := m.input.Value()
 		if value == "" {
 			return m, nil
+		}
+
+		// Check for slash commands before sending to agent.
+		if cmd := m.parseCommand(value); cmd != nil {
+			m.input.Clear()
+			return m, cmd
 		}
 
 		// Clear input and start streaming
@@ -431,6 +493,14 @@ func (m *Model) sendMessage(prompt string) tea.Cmd {
 func (m *Model) View() string {
 	t := styles.CurrentTheme()
 
+	// If modal is visible, render it on top (check FIRST to avoid building chat view).
+	if m.modelsModal != nil && m.modelsModal.IsVisible() {
+		debug.Event("chat", "View", "rendering modal")
+		return m.modelsModal.View()
+	}
+
+	debug.Event("chat", "View", fmt.Sprintf("rendering chat width=%d height=%d inputHeight=%d statusHeight=1 msgAreaHeight=%d", m.width, m.height, m.input.Height(), m.messagesAreaHeight()))
+
 	// Set component sizes (messages height adjusts dynamically based on input, activity, and todos)
 	m.messages.SetSize(m.width, m.messagesAreaHeight())
 	m.todoPanel.SetWidth(m.width)
@@ -445,13 +515,10 @@ func (m *Model) View() string {
 	inputView := m.input.View()
 	statusView := m.status.View()
 
-	// Separator
+	// Separator - use a simple line instead of BorderBottom to avoid extra blank line
 	separator := lipgloss.NewStyle().
-		Width(m.width).
-		BorderBottom(true).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(t.Border).
-		Render("")
+		Foreground(t.Border).
+		Render(strings.Repeat("─", m.width))
 
 	// Build layout - include panels only if they have content
 	var parts []string
@@ -466,22 +533,43 @@ func (m *Model) View() string {
 		parts = append(parts, separator, activityView)
 	}
 
-	parts = append(parts, separator, inputView, statusView)
+	// No separator before input - the input's border serves as the visual separator
+	parts = append(parts, inputView, statusView)
 
-	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+	debug.Event("chat", "View", fmt.Sprintf("parts count=%d, todoActive=%v activityActive=%v", len(parts), m.todoPanel.IsActive(), m.activity.IsActive()))
+	debug.Event("chat", "View", fmt.Sprintf("msgViewLines=%d inputViewLines=%d statusViewLines=%d", strings.Count(messagesView, "\n")+1, strings.Count(inputView, "\n")+1, strings.Count(statusView, "\n")+1))
+
+	chatView := lipgloss.JoinVertical(lipgloss.Left, parts...)
+
+	chatLines := strings.Count(chatView, "\n") + 1
+	debug.Event("chat", "View", fmt.Sprintf("chatView lines=%d (expected=%d)", chatLines, m.height))
+
+	// CRITICAL: If we're rendering more lines than terminal height, something is wrong
+	if chatLines > m.height {
+		debug.Event("chat", "OVERFLOW", fmt.Sprintf("chatView has %d lines but terminal height is %d - TRUNCATING", chatLines, m.height))
+		// Truncate to fit terminal
+		lines := strings.Split(chatView, "\n")
+		if len(lines) > m.height {
+			chatView = strings.Join(lines[:m.height], "\n")
+		}
+	}
+
+	return chatView
 }
 
 // SetSize sets the chat page size.
 func (m *Model) SetSize(width, height int) {
 	m.width = width
 	m.height = height
+	if m.modelsModal != nil {
+		m.modelsModal.SetSize(width, height)
+	}
 }
 
 // messagesAreaHeight calculates the current height of the messages area.
 func (m *Model) messagesAreaHeight() int {
 	statusHeight := 1
 	inputHeight := m.input.Height()
-	separatorHeight := 1
 
 	// Account for todo panel if active (height + separator)
 	todoHeight := m.todoPanel.Height()
@@ -495,7 +583,7 @@ func (m *Model) messagesAreaHeight() int {
 		activityHeight++ // Add separator height
 	}
 
-	h := m.height - statusHeight - inputHeight - separatorHeight - todoHeight - activityHeight
+	h := m.height - statusHeight - inputHeight - todoHeight - activityHeight
 	if h < 1 {
 		h = 1
 	}
@@ -504,6 +592,10 @@ func (m *Model) messagesAreaHeight() int {
 
 // Cursor returns the cursor position.
 func (m *Model) Cursor() *tea.Cursor {
+	// If modal is visible, return its cursor
+	if m.modelsModal != nil && m.modelsModal.IsVisible() {
+		return m.modelsModal.Cursor()
+	}
 	if !m.isStreaming {
 		return m.input.Cursor()
 	}

@@ -33,6 +33,17 @@ func NewProviderList(providers []catwalk.Provider) *ProviderList {
 	}
 }
 
+// AddCustomProviderOption adds a "Add Custom Provider" option to the list.
+func AddCustomProviderOption(providers []catwalk.Provider) []catwalk.Provider {
+	// Create a pseudo-provider for the custom option.
+	customOption := catwalk.Provider{
+		ID:   catwalk.InferenceProvider("custom"),
+		Name: "➕ Add Custom Provider",
+		Type: catwalk.TypeOpenAICompat, // Arbitrary type for display
+	}
+	return append(providers, customOption)
+}
+
 // Init initializes the component.
 func (p *ProviderList) Init() tea.Cmd {
 	return nil

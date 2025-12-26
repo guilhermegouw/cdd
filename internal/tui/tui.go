@@ -4,6 +4,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/fantasy"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/guilhermegouw/cdd/internal/agent"
 	"github.com/guilhermegouw/cdd/internal/bridge"
+	"github.com/guilhermegouw/cdd/internal/config"
 	"github.com/guilhermegouw/cdd/internal/debug"
 	"github.com/guilhermegouw/cdd/internal/pubsub"
 	"github.com/guilhermegouw/cdd/internal/tui/components/welcome"
@@ -41,6 +43,7 @@ type Model struct {
 	program      *tea.Program
 	hub          *pubsub.Hub
 	bridge       *bridge.TUIBridge
+	cfg          *config.Config
 	currentPage  page.ID
 	statusMsg    string
 	modelName    string
@@ -53,9 +56,10 @@ type Model struct {
 }
 
 // New creates a new TUI model.
-func New(providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent, agentFactory AgentFactory, modelFactory ModelFactory, hub *pubsub.Hub, modelName string) *Model {
+func New(cfg *config.Config, providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent, agentFactory AgentFactory, modelFactory ModelFactory, hub *pubsub.Hub, modelName string) *Model {
 	m := &Model{
 		keyMap:       DefaultKeyMap(),
+		cfg:          cfg,
 		providers:    providers,
 		isFirstRun:   isFirstRun,
 		currentPage:  page.Welcome,
@@ -72,6 +76,7 @@ func New(providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent, 
 		m.chatPage = chat.New(ag)
 		m.chatPage.SetAgentFactory(chat.AgentFactory(agentFactory))
 		m.chatPage.SetModelFactory(chat.ModelFactory(modelFactory))
+		m.chatPage.SetConfig(cfg, providers)
 		if modelName != "" {
 			m.chatPage.SetModelName(modelName)
 		}
@@ -127,6 +132,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.agent = ag
 		}
 
+		// Reload config after wizard saved it.
+		newCfg, err := config.Load()
+		if err != nil {
+			debug.Error("tui", err, "reloading config after wizard")
+		} else {
+			m.cfg = newCfg
+			m.providers = newCfg.KnownProviders()
+		}
+
 		// Get model name from wizard completion
 		modelName := msg.LargeModelID
 		if m.wizard != nil && m.wizard.SelectedLargeModel() != nil {
@@ -137,6 +151,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.chatPage = chat.New(m.agent)
 			m.chatPage.SetAgentFactory(chat.AgentFactory(m.agentFactory))
 			m.chatPage.SetModelFactory(chat.ModelFactory(m.modelFactory))
+			m.chatPage.SetConfig(m.cfg, m.providers)
 			if modelName != "" {
 				m.chatPage.SetModelName(modelName)
 			}
@@ -148,7 +163,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = "Configuration saved successfully!"
 		return m, nil
 	case util.InfoMsg:
-		m.statusMsg = msg.Msg
+		// Only set statusMsg for non-chat pages; chat has its own status handling
+		if m.currentPage != page.Chat {
+			m.statusMsg = msg.Msg
+		}
 		return m, nil
 	case page.ChangeMsg:
 		debug.Event("tui", "PageChange", fmt.Sprintf("page=%s", msg.Page))
@@ -255,6 +273,7 @@ func (m *Model) View() tea.View {
 	case page.Chat:
 		if m.chatPage != nil {
 			content = m.chatPage.View()
+			debug.Event("tui", "View", fmt.Sprintf("chat content lines=%d", strings.Count(content, "\n")+1))
 		}
 	case page.Main:
 		content = m.renderMain()
@@ -262,8 +281,8 @@ func (m *Model) View() tea.View {
 		content = "Unknown page"
 	}
 
-	// Add status message if present.
-	if m.statusMsg != "" {
+	// Add status message if present (but not on chat page - it has its own status bar).
+	if m.statusMsg != "" && m.currentPage != page.Chat {
 		status := t.S().Info.Render(m.statusMsg)
 		content = lipgloss.JoinVertical(lipgloss.Left, content, "", status)
 	}
@@ -309,11 +328,11 @@ func (m *Model) updateComponentSizes() {
 }
 
 // Run starts the TUI program.
-func Run(providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent, agentFactory AgentFactory, modelFactory ModelFactory, hub *pubsub.Hub, modelName string) error {
+func Run(cfg *config.Config, providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent, agentFactory AgentFactory, modelFactory ModelFactory, hub *pubsub.Hub, modelName string) error {
 	// Initialize theme.
 	styles.NewManager()
 
-	model := New(providers, isFirstRun, ag, agentFactory, modelFactory, hub, modelName)
+	model := New(cfg, providers, isFirstRun, ag, agentFactory, modelFactory, hub, modelName)
 	// In Bubble Tea v2, AltScreen and MouseMode are set in View()
 	p := tea.NewProgram(model)
 
