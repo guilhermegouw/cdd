@@ -1,8 +1,12 @@
 package chat
 
 import (
+	"fmt"
+	"strings"
+
 	"charm.land/lipgloss/v2"
 
+	"github.com/guilhermegouw/cdd/internal/debug"
 	"github.com/guilhermegouw/cdd/internal/tui/styles"
 )
 
@@ -67,6 +71,7 @@ func (s *StatusBar) View() string {
 
 	// Left side: model name or error
 	var left string
+	//nolint:gocritic // ifElseChain is clearer than switch for this mixed condition logic
 	if s.status == StatusError && s.errorMsg != "" {
 		// Truncate long error messages
 		errMsg := s.errorMsg
@@ -77,6 +82,9 @@ func (s *StatusBar) View() string {
 		left = t.S().Error.Render("Error: " + errMsg)
 	} else if s.modelName != "" {
 		left = t.S().Muted.Render(s.modelName)
+	} else {
+		// DEBUG: Always show something in status bar
+		left = t.S().Muted.Render("─── STATUS BAR ───")
 	}
 
 	// Right side: context-aware shortcuts
@@ -89,6 +97,7 @@ func (s *StatusBar) View() string {
 		shortcuts = "Enter send · Esc cancel · Ctrl+C quit"
 	}
 	right := t.S().Muted.Render(shortcuts)
+	debug.Event("status", "View", fmt.Sprintf("left=%q right=%q width=%d", left, shortcuts, s.width))
 
 	gap := s.width - lipgloss.Width(left) - lipgloss.Width(right) - 4
 	if gap < 1 {
@@ -97,5 +106,8 @@ func (s *StatusBar) View() string {
 
 	content := left + lipgloss.NewStyle().Width(gap).Render("") + right
 
-	return barStyle.Render(content)
+	result := barStyle.Render(content)
+	// Debug status bar output - log actual lines
+	debug.Event("status", "View", fmt.Sprintf("lines=%d width=%d", strings.Count(result, "\n")+1, s.width))
+	return result
 }

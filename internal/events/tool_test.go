@@ -1,3 +1,4 @@
+//nolint:goconst,errorlint // Test files use literal strings and direct error comparison.
 package events
 
 import (
@@ -273,6 +274,9 @@ func TestToolEventStruct(t *testing.T) {
 		}
 		if event.Progress != 0.5 {
 			t.Error("Progress mismatch")
+		}
+		if event.Timestamp.IsZero() {
+			t.Error("Timestamp should not be zero")
 		}
 	})
 }

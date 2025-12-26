@@ -80,7 +80,7 @@ func (p *TodoPanel) View() string {
 	}
 
 	t := styles.CurrentTheme()
-	var lines []string
+	lines := make([]string, 0, len(p.todos)+1) // Pre-allocate for header + todos
 
 	// Header
 	headerStyle := t.S().Muted.Bold(true)
@@ -120,7 +120,7 @@ func (p *TodoPanel) renderTodoItem(t *styles.Theme, todo tools.TodoItem) string 
 		icon = spinnerFrames[p.spinner]
 		iconStyle = t.S().Warning
 		text = todo.ActiveForm // Use active form for in-progress
-	default: // pending
+	case tools.TodoStatusPending:
 		icon = todoIconPending
 		iconStyle = t.S().Muted
 		text = todo.Content // Use imperative form for pending
@@ -141,10 +141,11 @@ func (p *TodoPanel) styledText(t *styles.Theme, status tools.TodoStatus, text st
 	case tools.TodoStatusInProgress:
 		// In-progress items are highlighted
 		return t.S().Text.Bold(true).Render(text)
-	default:
+	case tools.TodoStatusPending:
 		// Pending items are normal
 		return t.S().Text.Render(text)
 	}
+	return t.S().Text.Render(text)
 }
 
 // truncateText truncates text to fit the available width.

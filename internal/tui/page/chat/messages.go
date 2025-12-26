@@ -124,17 +124,42 @@ func (m *MessageList) Update(msg tea.Msg) (*MessageList, tea.Cmd) {
 
 // View renders the message list.
 func (m *MessageList) View() string {
+	debug.Event("messages", "View", fmt.Sprintf("ready=%v height=%d width=%d", m.ready, m.height, m.width))
 	if !m.ready {
 		return "Loading..."
 	}
 
 	view := m.viewport.View()
+	viewLines := strings.Count(view, "\n") + 1
+	debug.Event("messages", "ViewportOutput", fmt.Sprintf("viewLines=%d expectedHeight=%d", viewLines, m.height))
+
+	// CRITICAL FIX: If viewport output doesn't match expected height, force it to match
+	if viewLines != m.height && m.height > 0 {
+		debug.Event("messages", "HeightMismatch", fmt.Sprintf("fixing mismatch: got %d lines, need %d", viewLines, m.height))
+		lines := strings.Split(view, "\n")
+		if len(lines) > m.height {
+			// Truncate
+			view = strings.Join(lines[:m.height], "\n")
+		} else if len(lines) < m.height {
+			// Pad with empty lines
+			for i := len(lines); i < m.height; i++ {
+				lines = append(lines, "")
+			}
+			view = strings.Join(lines, "\n")
+		}
+	}
 
 	// Apply selection highlighting if there's a selection
 	if m.HasSelection() {
 		view = m.applySelectionHighlight(view)
 	}
 
+	lines := strings.Count(view, "\n") + 1
+	debug.Event("messages", "View", fmt.Sprintf("lines=%d height=%d viewLen=%d", lines, m.height, len(view)))
+	// Log last 200 chars to see what's at the bottom
+	if len(view) > 200 {
+		debug.Event("messages", "ViewEnd", fmt.Sprintf("last200=%q", view[len(view)-200:]))
+	}
 	return view
 }
 
@@ -154,6 +179,8 @@ func (m *MessageList) updateContent() {
 	if len(m.messages) == 0 {
 		empty := t.S().Muted.Render("No messages yet. Type something to start chatting.")
 		content := lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, empty)
+		contentLines := strings.Count(content, "\n") + 1
+		debug.Event("messages", "EmptyContent", fmt.Sprintf("width=%d height=%d contentLines=%d", m.width, m.height, contentLines))
 		m.viewport.SetContent(content)
 		m.renderedContent = ""
 		return

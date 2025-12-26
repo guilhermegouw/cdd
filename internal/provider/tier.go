@@ -35,9 +35,9 @@ func GetProviderForModel(cfg *config.Config, model *config.SelectedModel) (*conf
 
 // ValidateConfig checks that all configured tiers have valid providers.
 func ValidateConfig(cfg *config.Config) error {
-	for tier, model := range cfg.Models {
-		if _, ok := cfg.Providers[model.Provider]; !ok {
-			return fmt.Errorf("tier %s references unknown provider %q", tier, model.Provider)
+	for tier := range cfg.Models {
+		if _, ok := cfg.Providers[cfg.Models[tier].Provider]; !ok {
+			return fmt.Errorf("tier %s references unknown provider %q", tier, cfg.Models[tier].Provider)
 		}
 	}
 	return nil

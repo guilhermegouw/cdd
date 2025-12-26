@@ -12,9 +12,10 @@ import (
 // SaveConfig contains only the fields we want to save to disk.
 // This excludes runtime-only fields like knownProviders and resolved API keys.
 type SaveConfig struct {
-	Models    map[SelectedModelType]SelectedModel `json:"models,omitempty"`
-	Providers map[string]*SaveProviderConfig      `json:"providers,omitempty"`
-	Options   *Options                            `json:"options,omitempty"`
+	Models      map[SelectedModelType]SelectedModel `json:"models,omitempty"`
+	Providers   map[string]*SaveProviderConfig      `json:"providers,omitempty"`
+	Connections []Connection                        `json:"connections,omitempty"`
+	Options     *Options                            `json:"options,omitempty"`
 }
 
 // SaveProviderConfig is a minimal provider config for saving.
@@ -39,9 +40,10 @@ func SaveToFile(cfg *Config, path string) error {
 
 	// Create a minimal save config.
 	saveCfg := &SaveConfig{
-		Models:    cfg.Models,
-		Providers: make(map[string]*SaveProviderConfig),
-		Options:   cfg.Options,
+		Models:      cfg.Models,
+		Providers:   make(map[string]*SaveProviderConfig),
+		Connections: cfg.Connections,
+		Options:     cfg.Options,
 	}
 
 	// Only save provider API key templates and OAuth tokens.
@@ -67,47 +69,52 @@ func SaveToFile(cfg *Config, path string) error {
 }
 
 // SaveWizardResult saves the result of the setup wizard with API key authentication.
+// It saves to the Connections system (not legacy Providers).
 func SaveWizardResult(providerID, apiKey, largeModel, smallModel string) error {
-	cfg := NewConfig()
-
-	// Set provider with API key (could be actual key or env var reference).
-	cfg.Providers[providerID] = &ProviderConfig{
-		ID:     providerID,
-		APIKey: apiKey,
+	conn := Connection{
+		Name:       providerID,
+		ProviderID: providerID,
+		APIKey:     apiKey,
 	}
-
-	// Set model selections.
-	cfg.Models[SelectedModelTypeLarge] = SelectedModel{
-		Model:    largeModel,
-		Provider: providerID,
-	}
-	cfg.Models[SelectedModelTypeSmall] = SelectedModel{
-		Model:    smallModel,
-		Provider: providerID,
-	}
-
-	return Save(cfg)
+	return saveWizardConnection(conn, providerID, largeModel, smallModel)
 }
 
 // SaveWizardResultWithOAuth saves the result of the setup wizard with OAuth authentication.
+// It saves to the Connections system (not legacy Providers).
 func SaveWizardResultWithOAuth(providerID string, token *oauth.Token, largeModel, smallModel string) error {
+	conn := Connection{
+		Name:       providerID,
+		ProviderID: providerID,
+		OAuthToken: token,
+	}
+	return saveWizardConnection(conn, providerID, largeModel, smallModel)
+}
+
+// saveWizardConnection is a helper that saves a connection and sets model selections.
+func saveWizardConnection(conn Connection, providerID, largeModel, smallModel string) error {
 	cfg := NewConfig()
 
-	// Set provider with OAuth token.
-	cfg.Providers[providerID] = &ProviderConfig{
-		ID:         providerID,
-		OAuthToken: token,
-		APIKey:     token.AccessToken, // Store access token as API key for immediate use.
+	connManager := NewConnectionManager(cfg)
+	if err := connManager.Add(conn); err != nil {
+		return fmt.Errorf("adding connection: %w", err)
 	}
 
-	// Set model selections.
+	// Get the connection ID (Add generates it).
+	addedConn := connManager.GetByName(providerID)
+	if addedConn == nil {
+		return fmt.Errorf("failed to retrieve added connection")
+	}
+
+	// Set model selections with ConnectionID.
 	cfg.Models[SelectedModelTypeLarge] = SelectedModel{
-		Model:    largeModel,
-		Provider: providerID,
+		Model:        largeModel,
+		Provider:     providerID,
+		ConnectionID: addedConn.ID,
 	}
 	cfg.Models[SelectedModelTypeSmall] = SelectedModel{
-		Model:    smallModel,
-		Provider: providerID,
+		Model:        smallModel,
+		Provider:     providerID,
+		ConnectionID: addedConn.ID,
 	}
 
 	return Save(cfg)

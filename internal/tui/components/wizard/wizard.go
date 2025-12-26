@@ -1,4 +1,6 @@
 // Package wizard implements the setup wizard for CDD CLI.
+//
+//nolint:goconst // Key strings are standard keyboard identifiers.
 package wizard
 
 import (
@@ -20,6 +22,9 @@ type Step int
 // Wizard steps.
 const (
 	StepProvider Step = iota
+	StepCustomProviderMethod
+	StepCustomProviderDefine
+	StepCustomProviderModels
 	StepAuthMethod
 	StepOAuth
 	StepAPIKey
@@ -38,30 +43,36 @@ type CompleteMsg struct {
 
 // Wizard manages the setup wizard flow.
 type Wizard struct {
-	providerList     *ProviderList
-	authMethodChoice *AuthMethodChooser
-	oauthFlow        *OAuth2Flow
-	apiKeyInput      *APIKeyInput
-	largeModel       *ModelList
-	smallModel       *ModelList
-	selectedProvider *catwalk.Provider
-	selectedLarge    *catwalk.Model
-	selectedSmall    *catwalk.Model
-	oauthToken       *oauth.Token
-	apiKey           string
-	providers        []catwalk.Provider
-	height           int
-	width            int
-	step             Step
-	authMethod       AuthMethod
+	providerList           *ProviderList
+	authMethodChoice       *AuthMethodChooser
+	oauthFlow              *OAuth2Flow
+	apiKeyInput            *APIKeyInput
+	largeModel             *ModelList
+	smallModel             *ModelList
+	customProviderMethod   *CustomProviderMethod
+	customProviderDefine   *CustomProviderDefine
+	customProviderModels   *CustomProviderModels
+	selectedProvider       *catwalk.Provider
+	selectedCustomProvider *config.CustomProvider
+	selectedLarge          *catwalk.Model
+	selectedSmall          *catwalk.Model
+	oauthToken             *oauth.Token
+	apiKey                 string
+	providers              []catwalk.Provider
+	height                 int
+	width                  int
+	step                   Step
+	authMethod             AuthMethod
 }
 
 // NewWizard creates a new wizard instance.
 func NewWizard(providers []catwalk.Provider) *Wizard {
+	// Add custom provider option to the list.
+	providersWithCustom := AddCustomProviderOption(providers)
 	return &Wizard{
 		step:         StepProvider,
-		providers:    providers,
-		providerList: NewProviderList(providers),
+		providers:    providersWithCustom,
+		providerList: NewProviderList(providersWithCustom),
 	}
 }
 
@@ -74,7 +85,7 @@ func (w *Wizard) Init() tea.Cmd {
 func (w *Wizard) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	// Handle escape to go back.
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
-		if keyMsg.String() == "esc" {
+		if keyMsg.String() == keyEsc {
 			w.goBack()
 			return w, nil
 		}
@@ -83,6 +94,12 @@ func (w *Wizard) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	switch w.step {
 	case StepProvider:
 		return w.updateProvider(msg)
+	case StepCustomProviderMethod:
+		return w.updateCustomProviderMethod(msg)
+	case StepCustomProviderDefine:
+		return w.updateCustomProviderDefine(msg)
+	case StepCustomProviderModels:
+		return w.updateCustomProviderModels(msg)
 	case StepAuthMethod:
 		return w.updateAuthMethod(msg)
 	case StepOAuth:
@@ -102,6 +119,14 @@ func (w *Wizard) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 
 func (w *Wizard) updateProvider(msg tea.Msg) (util.Model, tea.Cmd) {
 	if m, ok := msg.(ProviderSelectedMsg); ok {
+		// Check if "Add Custom Provider" was selected.
+		if m.Provider.ID == catwalk.InferenceProvider("custom") {
+			w.customProviderMethod = NewCustomProviderMethod()
+			w.customProviderMethod.SetWidth(w.width)
+			w.step = StepCustomProviderMethod
+			return w, w.customProviderMethod.Init()
+		}
+
 		w.selectedProvider = &m.Provider
 
 		// Check if this is Anthropic - offer OAuth option.
@@ -142,6 +167,66 @@ func (w *Wizard) updateAuthMethod(msg tea.Msg) (util.Model, tea.Cmd) {
 	}
 
 	_, cmd := w.authMethodChoice.Update(msg)
+	return w, cmd
+}
+
+func (w *Wizard) updateCustomProviderMethod(msg tea.Msg) (util.Model, tea.Cmd) {
+	if m, ok := msg.(CustomProviderMethodSelectedMsg); ok {
+		switch m.Method {
+		case ProviderImportMethodManual:
+			w.customProviderDefine = NewCustomProviderDefine()
+			w.customProviderDefine.SetWidth(w.width)
+			w.step = StepCustomProviderDefine
+			return w, w.customProviderDefine.Init()
+		case ProviderImportMethodURL, ProviderImportMethodFile:
+			// TODO: Implement URL and file import in future PR.
+			// For now, fall back to manual.
+			w.customProviderDefine = NewCustomProviderDefine()
+			w.customProviderDefine.SetWidth(w.width)
+			w.step = StepCustomProviderDefine
+			return w, w.customProviderDefine.Init()
+		}
+	}
+
+	_, cmd := w.customProviderMethod.Update(msg)
+	return w, cmd
+}
+
+func (w *Wizard) updateCustomProviderDefine(msg tea.Msg) (util.Model, tea.Cmd) {
+	if m, ok := msg.(CustomProviderDefinedMsg); ok {
+		w.selectedCustomProvider = &m.Provider
+		w.customProviderModels = NewCustomProviderModels(m.Provider)
+		w.customProviderModels.SetSize(w.width, w.height)
+		w.step = StepCustomProviderModels
+		return w, w.customProviderModels.Init()
+	}
+
+	_, cmd := w.customProviderDefine.Update(msg)
+	return w, cmd
+}
+
+func (w *Wizard) updateCustomProviderModels(msg tea.Msg) (util.Model, tea.Cmd) {
+	if m, ok := msg.(CustomProviderModelsCompleteMsg); ok {
+		w.selectedCustomProvider = &m.Provider
+
+		// Save the custom provider.
+		loader := config.NewProviderLoader("")
+		manager := loader.GetCustomProviderManager()
+		// Ignore error - provider addition failure is non-fatal for wizard flow.
+		_ = manager.Add(m.Provider) //nolint:errcheck // Best-effort save, continue with wizard regardless
+
+		// Convert to catwalk provider and continue to API key input.
+		provider := m.Provider.ToCatwalkProvider()
+		w.selectedProvider = &provider
+
+		// Go to API key input.
+		w.apiKeyInput = NewAPIKeyInput(provider.Name)
+		w.apiKeyInput.SetWidth(w.width)
+		w.step = StepAPIKey
+		return w, w.apiKeyInput.Init()
+	}
+
+	_, cmd := w.customProviderModels.Update(msg)
 	return w, cmd
 }
 
@@ -230,6 +315,15 @@ func (w *Wizard) updateSmallModel(msg tea.Msg) (util.Model, tea.Cmd) {
 
 func (w *Wizard) goBack() {
 	switch w.step {
+	case StepCustomProviderMethod:
+		w.step = StepProvider
+		w.customProviderMethod = nil
+	case StepCustomProviderDefine:
+		w.step = StepCustomProviderMethod
+		w.customProviderDefine = nil
+	case StepCustomProviderModels:
+		w.step = StepCustomProviderDefine
+		w.customProviderModels = nil
 	case StepAuthMethod:
 		w.step = StepProvider
 		w.authMethodChoice = nil
@@ -237,8 +331,13 @@ func (w *Wizard) goBack() {
 		w.step = StepAuthMethod
 		w.oauthFlow = nil
 	case StepAPIKey:
-		// If we came from auth method choice, go back there.
-		if w.selectedProvider.ID == catwalk.InferenceProviderAnthropic {
+		// If we came from custom provider, go back to provider selection.
+		//nolint:gocritic // ifElseChain is clearer than switch for this mixed condition logic
+		if w.selectedCustomProvider != nil {
+			w.step = StepProvider
+			w.apiKeyInput = nil
+			w.selectedCustomProvider = nil
+		} else if w.selectedProvider.ID == catwalk.InferenceProviderAnthropic {
 			w.step = StepAuthMethod
 			w.apiKeyInput = nil
 		} else {
@@ -310,6 +409,12 @@ func (w *Wizard) View() string {
 	switch w.step {
 	case StepProvider:
 		content = w.providerList.View()
+	case StepCustomProviderMethod:
+		content = w.customProviderMethod.View()
+	case StepCustomProviderDefine:
+		content = w.customProviderDefine.View()
+	case StepCustomProviderModels:
+		content = w.customProviderModels.View()
 	case StepAuthMethod:
 		content = w.authMethodChoice.View()
 	case StepOAuth:
@@ -429,6 +534,15 @@ func (w *Wizard) SetSize(width, height int) {
 	if w.providerList != nil {
 		w.providerList.SetSize(width, height)
 	}
+	if w.customProviderMethod != nil {
+		w.customProviderMethod.SetWidth(width)
+	}
+	if w.customProviderDefine != nil {
+		w.customProviderDefine.SetWidth(width)
+	}
+	if w.customProviderModels != nil {
+		w.customProviderModels.SetSize(width, height)
+	}
 	if w.authMethodChoice != nil {
 		w.authMethodChoice.SetWidth(width)
 	}
@@ -464,6 +578,12 @@ func (w *Wizard) Cursor() *tea.Cursor {
 	if w.step == StepOAuth && w.oauthFlow != nil {
 		return w.oauthFlow.Cursor()
 	}
+	if w.step == StepCustomProviderDefine && w.customProviderDefine != nil {
+		return w.customProviderDefine.Cursor()
+	}
+	if w.step == StepCustomProviderModels && w.customProviderModels != nil {
+		return w.customProviderModels.Cursor()
+	}
 	return nil
 }
 
@@ -471,6 +591,8 @@ func (w *Wizard) oauthStepIndex() int {
 	switch w.step {
 	case StepProvider:
 		return 0
+	case StepCustomProviderMethod, StepCustomProviderDefine, StepCustomProviderModels:
+		return 0 // Custom provider steps are not shown in OAuth progress.
 	case StepAuthMethod:
 		return 1
 	case StepOAuth, StepAPIKey:
@@ -489,6 +611,8 @@ func (w *Wizard) apiKeyStepIndex() int {
 	switch w.step {
 	case StepProvider:
 		return 0
+	case StepCustomProviderMethod, StepCustomProviderDefine, StepCustomProviderModels:
+		return 0 // Custom provider steps are not shown in API key progress.
 	case StepAuthMethod, StepAPIKey, StepOAuth:
 		return 1
 	case StepLargeModel:
@@ -497,7 +621,6 @@ func (w *Wizard) apiKeyStepIndex() int {
 		return 3
 	case StepComplete:
 		return 4
-	default:
-		return 0
 	}
+	return 0
 }

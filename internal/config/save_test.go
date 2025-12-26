@@ -155,17 +155,24 @@ func TestSaveWizardResult(t *testing.T) {
 		t.Fatalf("Failed to parse config file: %v", err)
 	}
 
-	// Verify provider.
-	if saved.Providers["openai"] == nil {
-		t.Fatal("Provider 'openai' not saved")
+	// Verify connection was created.
+	if len(saved.Connections) == 0 {
+		t.Fatal("No connections saved")
 	}
-	if saved.Providers["openai"].APIKey != "$OPENAI_API_KEY" {
-		t.Errorf("APIKey = %q, want %q", saved.Providers["openai"].APIKey, "$OPENAI_API_KEY")
+	conn := saved.Connections[0]
+	if conn.ProviderID != "openai" {
+		t.Errorf("Connection.ProviderID = %q, want %q", conn.ProviderID, "openai")
+	}
+	if conn.APIKey != "$OPENAI_API_KEY" {
+		t.Errorf("Connection.APIKey = %q, want %q", conn.APIKey, "$OPENAI_API_KEY")
 	}
 
-	// Verify models.
+	// Verify models have ConnectionID set.
 	if saved.Models[SelectedModelTypeLarge].Model != "gpt-4o" {
 		t.Errorf("Large model = %q, want %q", saved.Models[SelectedModelTypeLarge].Model, "gpt-4o")
+	}
+	if saved.Models[SelectedModelTypeLarge].ConnectionID == "" {
+		t.Error("Large model should have ConnectionID set")
 	}
 	if saved.Models[SelectedModelTypeLarge].Provider != "openai" {
 		t.Errorf("Large model provider = %q, want %q", saved.Models[SelectedModelTypeLarge].Provider, "openai")
@@ -173,8 +180,8 @@ func TestSaveWizardResult(t *testing.T) {
 	if saved.Models[SelectedModelTypeSmall].Model != "gpt-4o-mini" {
 		t.Errorf("Small model = %q, want %q", saved.Models[SelectedModelTypeSmall].Model, "gpt-4o-mini")
 	}
-	if saved.Models[SelectedModelTypeSmall].Provider != "openai" {
-		t.Errorf("Small model provider = %q, want %q", saved.Models[SelectedModelTypeSmall].Provider, "openai")
+	if saved.Models[SelectedModelTypeSmall].ConnectionID == "" {
+		t.Error("Small model should have ConnectionID set")
 	}
 }
 
@@ -205,31 +212,36 @@ func TestSaveWizardResultWithOAuth(t *testing.T) {
 		t.Fatalf("Failed to parse config file: %v", err)
 	}
 
-	// Verify OAuth token is saved.
-	if saved.Providers["anthropic"] == nil {
-		t.Fatal("Provider 'anthropic' not saved")
+	// Verify connection with OAuth token is saved.
+	if len(saved.Connections) == 0 {
+		t.Fatal("No connections saved")
 	}
-	if saved.Providers["anthropic"].OAuthToken == nil {
-		t.Fatal("OAuth token not saved")
+	conn := saved.Connections[0]
+	if conn.ProviderID != "anthropic" {
+		t.Errorf("Connection.ProviderID = %q, want %q", conn.ProviderID, "anthropic")
 	}
-	if saved.Providers["anthropic"].OAuthToken.AccessToken != "access-token-123" {
-		t.Errorf("AccessToken = %q, want %q", saved.Providers["anthropic"].OAuthToken.AccessToken, "access-token-123")
+	if conn.OAuthToken == nil {
+		t.Fatal("Connection.OAuthToken not saved")
 	}
-	if saved.Providers["anthropic"].OAuthToken.RefreshToken != "refresh-token-456" {
-		t.Errorf("RefreshToken = %q, want %q", saved.Providers["anthropic"].OAuthToken.RefreshToken, "refresh-token-456")
+	if conn.OAuthToken.AccessToken != "access-token-123" {
+		t.Errorf("AccessToken = %q, want %q", conn.OAuthToken.AccessToken, "access-token-123")
+	}
+	if conn.OAuthToken.RefreshToken != "refresh-token-456" {
+		t.Errorf("RefreshToken = %q, want %q", conn.OAuthToken.RefreshToken, "refresh-token-456")
 	}
 
-	// Verify API key is set to access token.
-	if saved.Providers["anthropic"].APIKey != "access-token-123" {
-		t.Errorf("APIKey = %q, want %q", saved.Providers["anthropic"].APIKey, "access-token-123")
-	}
-
-	// Verify models.
+	// Verify models have ConnectionID set.
 	if saved.Models[SelectedModelTypeLarge].Model != "claude-opus-4" {
 		t.Errorf("Large model = %q, want %q", saved.Models[SelectedModelTypeLarge].Model, "claude-opus-4")
 	}
+	if saved.Models[SelectedModelTypeLarge].ConnectionID == "" {
+		t.Error("Large model should have ConnectionID set")
+	}
 	if saved.Models[SelectedModelTypeSmall].Model != "claude-haiku-3" {
 		t.Errorf("Small model = %q, want %q", saved.Models[SelectedModelTypeSmall].Model, "claude-haiku-3")
+	}
+	if saved.Models[SelectedModelTypeSmall].ConnectionID == "" {
+		t.Error("Small model should have ConnectionID set")
 	}
 }
 

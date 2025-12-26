@@ -1,3 +1,4 @@
+//nolint:dupl,errorlint // Test files use direct error comparison.
 package models
 
 import (

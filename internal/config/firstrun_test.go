@@ -3,99 +3,105 @@ package config
 
 import (
 	"testing"
+
+	"github.com/guilhermegouw/cdd/internal/oauth"
 )
 
 // Note: IsFirstRun() and NeedsSetup() use xdg.ConfigHome which is cached at init time.
-// We test the helper function hasConfiguredProviders directly since it contains
+// We test the helper function hasConfiguredConnections directly since it contains
 // the core logic.
 
-func TestHasConfiguredProviders(t *testing.T) {
+func TestHasConfiguredConnections(t *testing.T) {
 	//nolint:govet // Field order optimized for test readability.
 	tests := []struct {
-		name      string
-		providers map[string]*ProviderConfig
-		want      bool
+		name        string
+		connections []Connection
+		want        bool
 	}{
 		{
-			name:      "nil providers",
-			providers: nil,
-			want:      false,
+			name:        "nil connections",
+			connections: nil,
+			want:        false,
 		},
 		{
-			name:      "empty providers",
-			providers: map[string]*ProviderConfig{},
-			want:      false,
+			name:        "empty connections",
+			connections: []Connection{},
+			want:        false,
 		},
 		{
-			name: "provider without API key",
-			providers: map[string]*ProviderConfig{
-				"test": {ID: "test", APIKey: ""},
+			name: "connection without authentication",
+			connections: []Connection{
+				{ID: "test", Name: "Test", ProviderID: "anthropic"},
 			},
 			want: false,
 		},
 		{
-			name: "provider with API key",
-			providers: map[string]*ProviderConfig{
-				"test": {ID: "test", APIKey: "key"},
+			name: "connection with API key",
+			connections: []Connection{
+				{ID: "test", Name: "Test", ProviderID: "anthropic", APIKey: "key"},
 			},
 			want: true,
 		},
 		{
-			name: "disabled provider with API key",
-			providers: map[string]*ProviderConfig{
-				"test": {ID: "test", APIKey: "key", Disable: true},
-			},
-			want: false,
-		},
-		{
-			name: "mixed providers - one enabled with key",
-			providers: map[string]*ProviderConfig{
-				"disabled": {ID: "disabled", APIKey: "key", Disable: true},
-				"enabled":  {ID: "enabled", APIKey: "key", Disable: false},
+			name: "connection with OAuth token",
+			connections: []Connection{
+				{ID: "test", Name: "Test", ProviderID: "anthropic", OAuthToken: &oauth.Token{AccessToken: "token"}},
 			},
 			want: true,
 		},
 		{
-			name: "multiple enabled providers",
-			providers: map[string]*ProviderConfig{
-				"first":  {ID: "first", APIKey: "key1", Disable: false},
-				"second": {ID: "second", APIKey: "key2", Disable: false},
+			name: "multiple connections - one configured",
+			connections: []Connection{
+				{ID: "empty", Name: "Empty", ProviderID: "openai"},
+				{ID: "configured", Name: "Configured", ProviderID: "anthropic", APIKey: "key"},
 			},
 			want: true,
 		},
 		{
-			name: "provider with only whitespace API key",
-			providers: map[string]*ProviderConfig{
-				"test": {ID: "test", APIKey: "   "},
+			name: "multiple configured connections",
+			connections: []Connection{
+				{ID: "first", Name: "First", ProviderID: "anthropic", APIKey: "key1"},
+				{ID: "second", Name: "Second", ProviderID: "openai", APIKey: "key2"},
 			},
-			want: true, // Whitespace is considered a value.
+			want: true,
+		},
+		{
+			name: "connection with only whitespace API key",
+			connections: []Connection{
+				{ID: "test", Name: "Test", ProviderID: "anthropic", APIKey: "   "},
+			},
+			want: true, // Whitespace is considered a value (IsConfigured checks for non-empty string).
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := NewConfig()
-			cfg.Providers = tt.providers
+			cfg.Connections = tt.connections
 
-			got := hasConfiguredProviders(cfg)
+			got := hasConfiguredConnections(cfg)
 			if got != tt.want {
-				t.Errorf("hasConfiguredProviders() = %v, want %v", got, tt.want)
+				t.Errorf("hasConfiguredConnections() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestHasConfiguredProviders_WithOAuthToken(t *testing.T) {
-	// Test that OAuth tokens count as configured (since APIKey is set from AccessToken).
+func TestHasConfiguredConnections_WithOAuthToken(t *testing.T) {
+	// Test that OAuth tokens count as configured.
 	cfg := NewConfig()
-	cfg.Providers = map[string]*ProviderConfig{
-		"anthropic": {
-			ID:     "anthropic",
-			APIKey: "oauth-access-token", // Set from OAuth flow.
+	cfg.Connections = []Connection{
+		{
+			ID:         "anthropic-oauth",
+			Name:       "Anthropic (OAuth)",
+			ProviderID: "anthropic",
+			OAuthToken: &oauth.Token{
+				AccessToken: "oauth-access-token",
+			},
 		},
 	}
 
-	if !hasConfiguredProviders(cfg) {
-		t.Error("hasConfiguredProviders() = false, want true when OAuth token provides API key")
+	if !hasConfiguredConnections(cfg) {
+		t.Error("hasConfiguredConnections() = false, want true when OAuth token is configured")
 	}
 }

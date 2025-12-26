@@ -215,6 +215,7 @@ func TestHubConcurrentOperations(t *testing.T) {
 	})
 }
 
+//nolint:gocyclo // Integration test with multiple scenarios
 func TestHubBrokerIntegration(t *testing.T) {
 	t.Run("events flow correctly between publishers and subscribers", func(t *testing.T) {
 		hub := NewHub()

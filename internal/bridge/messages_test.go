@@ -1,3 +1,4 @@
+//nolint:errorlint // Test files use direct error comparison.
 package bridge
 
 import (
@@ -126,6 +127,9 @@ func TestErrorMsg(t *testing.T) {
 
 		if msg.Error != nil {
 			t.Error("expected Error to be nil")
+		}
+		if msg.Source != "tool_broker" {
+			t.Error("expected Source to be tool_broker")
 		}
 	})
 }

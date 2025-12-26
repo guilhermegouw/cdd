@@ -46,6 +46,8 @@ linters:
 
     govet:
       enable-all: true
+      disable:
+        - fieldalignment  # Micro-optimization, not worth the noise
 
     gocyclo:
       min-complexity: 15

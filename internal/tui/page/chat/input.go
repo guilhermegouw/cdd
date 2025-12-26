@@ -1,11 +1,15 @@
 package chat
 
 import (
+	"fmt"
+	"strings"
+
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/guilhermegouw/cdd/internal/debug"
 	"github.com/guilhermegouw/cdd/internal/tui/styles"
 )
 
@@ -14,6 +18,7 @@ type Input struct {
 	textArea textarea.Model
 	width    int
 	enabled  bool
+	viewID   int // Debug: track view renders
 }
 
 // NewInput creates a new input component.
@@ -99,10 +104,23 @@ func (i *Input) Update(msg tea.Msg) (*Input, tea.Cmd) {
 func (i *Input) View() string {
 	t := styles.CurrentTheme()
 
+	// Track view renders for debugging
+	i.viewID++
+	debug.Event("input", "View", fmt.Sprintf("viewID=%d width=%d taWidth=%d taHeight=%d enabled=%v focused=%v", i.viewID, i.width, i.textArea.Width(), i.textArea.Height(), i.enabled, i.textArea.Focused()))
+
 	// Ensure width is never negative
 	width := i.width - 4
 	if width < 1 {
 		width = 1
+	}
+
+	textAreaView := i.textArea.View()
+
+	// Debug: log exact content of textarea view
+	taLines := strings.Count(textAreaView, "\n") + 1
+	debug.Event("input", "TextAreaView", fmt.Sprintf("lines=%d len=%d expectedHeight=%d", taLines, len(textAreaView), i.textArea.Height()))
+	if taLines > i.textArea.Height() {
+		debug.Event("input", "TextAreaOVERFLOW", fmt.Sprintf("textArea returned %d lines but height is %d!", taLines, i.textArea.Height()))
 	}
 
 	inputStyle := lipgloss.NewStyle().
@@ -115,7 +133,19 @@ func (i *Input) View() string {
 		inputStyle = inputStyle.BorderForeground(t.Border)
 	}
 
-	return inputStyle.Render(i.textArea.View())
+	// Debug: add view ID to help identify duplicates
+	debug.Event("input", "Render", fmt.Sprintf("viewID=%d rendering input, textAreaView len=%d lines=%d", i.viewID, len(textAreaView), strings.Count(textAreaView, "\n")+1))
+	result := inputStyle.Render(textAreaView)
+	debug.Event("input", "Render", fmt.Sprintf("viewID=%d result len=%d lines=%d", i.viewID, len(result), strings.Count(result, "\n")+1))
+	// Log first 100 chars of textarea view to see what it contains
+	if textAreaView != "" {
+		preview := textAreaView
+		if len(preview) > 100 {
+			preview = preview[:100]
+		}
+		debug.Event("input", "TextAreaPreview", fmt.Sprintf("%q", preview))
+	}
+	return result
 }
 
 // SetWidth sets the input width.
@@ -180,5 +210,7 @@ func (i *Input) Cursor() *tea.Cursor {
 // Height returns the current height of the input including borders.
 func (i *Input) Height() int {
 	// textarea height + 2 for border (top + bottom)
-	return i.textArea.Height() + 2
+	h := i.textArea.Height() + 2
+	debug.Event("input", "Height", fmt.Sprintf("textAreaHeight=%d totalHeight=%d", i.textArea.Height(), h))
+	return h
 }

@@ -54,7 +54,7 @@ func (a *AuthMethodChooser) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 		a.selected = AuthMethodOAuth2
 	case "right", "l":
 		a.selected = AuthMethodAPIKey
-	case "tab":
+	case keyTab:
 		a.toggleChoice()
 	case keyEnter:
 		return a, util.CmdHandler(AuthMethodSelectedMsg{Method: a.selected})

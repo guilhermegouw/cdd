@@ -37,6 +37,7 @@ It supports multiple phases of development:
 	cmd.Flags().Bool("debug", false, "Enable debug logging to ~/.cdd/debug.log")
 	cmd.AddCommand(newVersionCmd())
 	cmd.AddCommand(newStatusCmd())
+	cmd.AddCommand(newProvidersCmd())
 
 	return cmd
 }
@@ -89,12 +90,12 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 
 	// Define agent factory for TUI to reload agent on config changes.
 	agentFactory := func() (*agent.DefaultAgent, error) {
-		newCfg, err := config.Load()
-		if err != nil {
-			return nil, fmt.Errorf("loading config: %w", err)
+		newCfg, loadErr := config.Load()
+		if loadErr != nil {
+			return nil, fmt.Errorf("loading config: %w", loadErr)
 		}
-		ag, _, err := createAgent(newCfg, hub)
-		return ag, err
+		newAgent, _, createErr := createAgent(newCfg, hub)
+		return newAgent, createErr
 	}
 
 	// Define model factory for rebuilding model with fresh tokens.
@@ -107,7 +108,7 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 		return createModel(newCfg)
 	}
 
-	return tui.Run(providers, isFirstRun, ag, agentFactory, modelFactory, hub, modelName)
+	return tui.Run(cfg, providers, isFirstRun, ag, agentFactory, modelFactory, hub, modelName)
 }
 
 func createAgent(cfg *config.Config, hub *pubsub.Hub) (*agent.DefaultAgent, string, error) {

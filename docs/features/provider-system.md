@@ -21,6 +21,19 @@ This document provides comprehensive documentation for the provider system, incl
   - [Provider Configuration](#provider-configuration)
   - [First-Run Detection](#first-run-detection)
   - [Configuration Persistence](#configuration-persistence)
+- [Custom Providers](#custom-providers)
+  - [Overview](#overview-1)
+  - [Provider Templates](#provider-templates)
+  - [CLI Commands](#cli-commands)
+  - [Custom Provider Structure](#custom-provider-structure)
+  - [Provider Fields](#provider-fields)
+  - [Supported Provider Types](#supported-provider-types)
+  - [Model Fields](#model-fields)
+  - [Validation](#validation)
+  - [Provider Merging](#provider-merging)
+  - [Wizard Integration](#wizard-integration)
+  - [Example: Adding an Ollama Provider](#example-adding-an-ollama-provider)
+  - [File Storage](#file-storage)
 - [Quality Tooling](#quality-tooling)
   - [GitHub Actions CI](#github-actions-ci)
   - [golangci-lint Configuration](#golangci-lint-configuration)
@@ -476,6 +489,288 @@ Example complete configuration:
 
 ---
 
+## Custom Providers
+
+CDD supports custom provider configurations that extend beyond the built-in catwalk providers. Custom providers allow you to add support for additional LLM services, self-hosted models, or specialized APIs.
+
+### Overview
+
+Custom providers are stored in `$XDG_DATA_HOME/cdd/custom-providers.json` and are merged with catwalk providers during configuration loading. Custom providers can override catwalk providers if they share the same ID.
+
+**Key features**:
+- Pre-built templates for common providers (Ollama, LM Studio, OpenRouter, etc.)
+- Manual provider definition with full customization
+- File-based import/export for sharing configurations
+- URL-based import for remote configurations
+- Full validation support
+
+**Implementation**: `internal/config/custom_provider.go`, `internal/config/provider_loader.go`, `internal/config/provider_validator.go`
+
+### Provider Templates
+
+CDD includes pre-built templates for popular LLM services:
+
+| Template | Description | Type |
+|----------|-------------|------|
+| `ollama` | Local Ollama server | openai-compat |
+| `lmstudio` | LM Studio GUI | openai-compat |
+| `openrouter` | OpenRouter API | openrouter |
+| `together` | Together AI | openai-compat |
+| `deepseek` | DeepSeek API | openai-compat |
+| `groq` | Groq fast inference | openai-compat |
+| `anthropic-compatible` | Generic Anthropic API | anthropic |
+| `azure-openai` | Azure OpenAI Service | azure |
+| `vertexai` | Google Vertex AI | google-vertex |
+
+**Implementation**: `internal/config/provider_templates.go`
+
+### CLI Commands
+
+#### List Providers
+
+```bash
+cdd providers list                # List all providers
+cdd providers list --custom-only  # List only custom providers
+cdd providers list --catwalk-only # List only catwalk providers
+```
+
+#### Show Provider Details
+
+```bash
+cdd providers show <provider-id>  # Show detailed provider information
+```
+
+#### Add Provider from Template
+
+```bash
+cdd providers add-template <template-name> [id] [name]
+
+# Examples:
+cdd providers add-template ollama
+cdd providers add-template ollama my-ollama "My Ollama"
+cdd providers add-template openrouter
+```
+
+#### Add Provider Manually (Interactive)
+
+```bash
+cdd providers add
+```
+
+This launches an interactive wizard for creating custom providers.
+
+#### Add Provider from File
+
+```bash
+cdd providers add-file <path-to-json>
+```
+
+#### Add Provider from URL
+
+```bash
+cdd providers add-url <url>
+```
+
+#### Remove Provider
+
+```bash
+cdd providers remove <provider-id>
+```
+
+#### Export Provider Configuration
+
+```bash
+cdd providers export <provider-id>          # Print to stdout
+cdd providers export <provider-id> -o file  # Write to file
+```
+
+#### Validate Provider
+
+```bash
+cdd providers validate <provider-id>
+```
+
+#### List Templates
+
+```bash
+cdd providers templates  # List all available templates
+```
+
+### Custom Provider Structure
+
+A custom provider configuration:
+
+```json
+{
+  "name": "My Custom Provider",
+  "id": "my-custom-provider",
+  "type": "openai-compat",
+  "api_endpoint": "https://api.example.com/v1",
+  "default_headers": {
+    "X-API-Key": "$MY_API_KEY",
+    "X-Custom-Header": "value"
+  },
+  "default_large_model_id": "model-large",
+  "default_small_model_id": "model-small",
+  "models": [
+    {
+      "id": "model-large",
+      "name": "Large Model",
+      "context_window": 128000,
+      "default_max_tokens": 8192,
+      "cost_per_1m_in": 1.0,
+      "cost_per_1m_out": 2.0
+    }
+  ],
+  "created_at": "2025-12-25T10:00:00Z",
+  "updated_at": "2025-12-25T10:00:00Z"
+}
+```
+
+### Provider Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Human-readable display name |
+| `id` | string | Yes | Unique provider identifier |
+| `type` | string | Yes | Provider type |
+| `api_endpoint` | string | No | API endpoint URL |
+| `base_url` | string | No | Fallback base URL (deprecated) |
+| `default_headers` | map | No | Default HTTP headers |
+| `default_large_model_id` | string | No | Default large model ID |
+| `default_small_model_id` | string | No | Default small model ID |
+| `models` | array | No | Available models |
+| `created_at` | string | Auto | Creation timestamp |
+| `updated_at` | string | Auto | Last update timestamp |
+
+### Supported Provider Types
+
+- `anthropic` - Native Anthropic API
+- `openai` - Native OpenAI API
+- `openai-compat` - OpenAI-compatible APIs
+- `google` - Google AI API
+- `azure` - Azure OpenAI Service
+- `bedrock` - AWS Bedrock
+- `google-vertex` - Google Vertex AI
+- `openrouter` - OpenRouter API
+
+### Model Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique model identifier |
+| `name` | string | Human-readable model name |
+| `context_window` | int | Maximum context length |
+| `default_max_tokens` | int | Default max tokens |
+| `cost_per_1m_in` | float | Input cost per 1M tokens |
+| `cost_per_1m_out` | float | Output cost per 1M tokens |
+| `cost_per_1m_in_cached` | float | Cached input cost per 1M tokens |
+| `cost_per_1m_out_cached` | float | Cached output cost per 1M tokens |
+
+### Validation
+
+Custom providers are validated before being added:
+
+**Required fields**: name, id, type
+**Valid types**: Must match supported provider types
+**URL validation**: api_endpoint must be a valid HTTP/HTTPS URL if provided
+**Duplicate IDs**: Provider IDs must be unique
+**Duplicate model IDs**: Model IDs within a provider must be unique
+
+**Implementation**: `internal/config/provider_validator.go`
+
+### Provider Merging
+
+Custom providers are merged with catwalk providers during configuration loading:
+
+1. Catwalk providers are loaded first
+2. Custom providers are loaded from `custom-providers.json`
+3. Custom providers override catwalk providers with matching IDs
+4. Final provider list is returned to the application
+
+**Implementation**: `internal/config/provider_loader.go`
+
+### Wizard Integration
+
+Custom providers can be added through the TUI wizard:
+
+1. Run `cdd` or `cdd config`
+2. Select "➕ Add Custom Provider" from the provider list
+3. Choose import method:
+   - **Manual**: Define provider step-by-step
+   - **From URL**: Import from a URL
+   - **From File**: Import from a local file
+4. Configure provider details
+5. Add models (optional)
+6. Confirm and save
+
+**Implementation**: `internal/tui/components/wizard/custom_provider_*.go`
+
+### Example: Adding an Ollama Provider
+
+**Using CLI**:
+```bash
+cdd providers add-template ollama
+```
+
+**Using Wizard**:
+```bash
+cdd
+# Select "➕ Add Custom Provider"
+# Select "Manual"
+# Enter provider details or use template
+```
+
+**Manual Configuration**:
+```json
+{
+  "name": "Ollama",
+  "id": "ollama",
+  "type": "openai-compat",
+  "api_endpoint": "http://localhost:11434/v1",
+  "default_large_model_id": "qwen2.5:32b",
+  "default_small_model_id": "qwen2.5:7b",
+  "models": [
+    {
+      "id": "qwen2.5:32b",
+      "name": "Qwen 2.5 32B",
+      "context_window": 32768
+    },
+    {
+      "id": "qwen2.5:7b",
+      "name": "Qwen 2.5 7B",
+      "context_window": 32768
+    }
+  ]
+}
+```
+
+### File Storage
+
+Custom providers are stored in:
+```
+~/.local/share/cdd/custom-providers.json
+```
+
+The file contains an array of custom provider configurations:
+
+```json
+[
+  {
+    "name": "Ollama",
+    "id": "ollama",
+    ...
+  },
+  {
+    "name": "LM Studio",
+    "id": "lmstudio",
+    ...
+  }
+]
+```
+
+---
+
 ## Quality Tooling
 
 ### GitHub Actions CI
@@ -579,6 +874,9 @@ The provider system has comprehensive test coverage:
 - `internal/config/load_test.go`: Configuration loading and merging
 - `internal/config/providers_test.go`: Provider metadata loading and caching
 - `internal/config/resolve_test.go`: Environment variable resolution
+- `internal/config/custom_provider_test.go`: Custom provider management tests
+- `internal/config/provider_loader_test.go`: Provider loading and merging tests
+- `internal/config/provider_validator_test.go`: Provider validation tests
 - `internal/provider/provider_test.go`: Provider building and model creation
 - `internal/provider/tier_test.go`: Tier selection and validation
 
@@ -619,15 +917,21 @@ cdd version
 cdd/
 ├── cmd/
 │   ├── root.go           # Root cobra command
-│   └── version.go        # Version command with build info
+│   ├── version.go        # Version command with build info
+│   └── providers.go      # Provider management commands
 ├── internal/
 │   ├── config/
-│   │   ├── config.go     # Config structures and types
-│   │   ├── firstrun.go   # First-run detection
-│   │   ├── load.go       # Configuration loading logic
-│   │   ├── providers.go  # Catwalk provider integration
-│   │   ├── resolve.go    # Environment variable resolver
-│   │   └── save.go       # Configuration persistence
+│   │   ├── config.go         # Config structures and types
+│   │   ├── firstrun.go       # First-run detection
+│   │   ├── load.go           # Configuration loading logic
+│   │   ├── providers.go      # Catwalk provider integration
+│   │   ├── resolve.go        # Environment variable resolver
+│   │   ├── save.go           # Configuration persistence
+│   │   ├── custom_provider.go      # Custom provider management
+│   │   ├── provider_loader.go      # Provider loading and merging
+│   │   ├── provider_validator.go   # Provider validation
+│   │   ├── provider_templates.go   # Pre-built provider templates
+│   │   └── *_test.go         # Test files
 │   ├── oauth/
 │   │   ├── token.go      # OAuth token struct
 │   │   └── claude/
@@ -643,6 +947,10 @@ cdd/
 │       ├── util/
 │       ├── styles/
 │       └── components/
+│           └── wizard/
+│               ├── custom_provider_method.go    # Import method selection
+│               ├── custom_provider_define.go    # Manual provider definition
+│               └── custom_provider_models.go    # Model configuration
 ├── .github/
 │   └── workflows/
 │       └── ci.yml        # GitHub Actions workflow

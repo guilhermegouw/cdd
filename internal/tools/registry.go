@@ -95,6 +95,7 @@ func (r *Registry) Names() []string {
 }
 
 // DefaultRegistry creates a registry with the default set of tools.
+//
 // Deprecated: Use NewDefaultRegistry instead.
 func DefaultRegistry(workingDir string) *Registry {
 	return NewDefaultRegistry(RegistryConfig{WorkingDir: workingDir})

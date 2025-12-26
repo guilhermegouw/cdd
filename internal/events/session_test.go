@@ -1,3 +1,4 @@
+//nolint:goconst // Test files use literal strings for clarity.
 package events
 
 import (

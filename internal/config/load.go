@@ -20,7 +20,7 @@ const (
 
 // Load finds and loads configuration from standard locations.
 // It merges global config with project config (project takes precedence),
-// then configures providers using catwalk metadata.
+// then configures providers using catwalk metadata and custom providers.
 func Load() (*Config, error) {
 	cfg := NewConfig()
 	resolver := NewResolver()
@@ -40,7 +40,14 @@ func Load() (*Config, error) {
 
 	applyDefaults(cfg)
 
-	providers, err := LoadProviders(cfg)
+	// Migrate existing providers to connections (backward compatibility).
+	if err := MigrateToConnections(cfg); err != nil {
+		return nil, fmt.Errorf("migrating to connections: %w", err)
+	}
+
+	// Load providers using ProviderLoader (catwalk + custom).
+	loader := NewProviderLoader(cfg.DataDir())
+	providers, err := loader.LoadAllProviders(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("loading providers: %w", err)
 	}
@@ -64,7 +71,14 @@ func LoadFromFile(path string) (*Config, error) {
 
 	applyDefaults(cfg)
 
-	providers, err := LoadProviders(cfg)
+	// Migrate existing providers to connections (backward compatibility).
+	if err := MigrateToConnections(cfg); err != nil {
+		return nil, fmt.Errorf("migrating to connections: %w", err)
+	}
+
+	// Load providers using ProviderLoader (catwalk + custom).
+	loader := NewProviderLoader(cfg.DataDir())
+	providers, err := loader.LoadAllProviders(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("loading providers: %w", err)
 	}
@@ -120,12 +134,27 @@ func findProjectConfig() string {
 }
 
 func mergeConfig(dst, src *Config) {
-	for tier, model := range src.Models {
-		dst.Models[tier] = model
+	for tier := range src.Models {
+		dst.Models[tier] = src.Models[tier]
 	}
 
-	for name, provider := range src.Providers {
-		dst.Providers[name] = provider
+	for name := range src.Providers {
+		dst.Providers[name] = src.Providers[name]
+	}
+
+	// Merge connections (project connections override global by ID).
+	if len(src.Connections) > 0 {
+		connMap := make(map[string]Connection)
+		for i := range dst.Connections {
+			connMap[dst.Connections[i].ID] = dst.Connections[i]
+		}
+		for i := range src.Connections {
+			connMap[src.Connections[i].ID] = src.Connections[i]
+		}
+		dst.Connections = make([]Connection, 0, len(connMap))
+		for id := range connMap {
+			dst.Connections = append(dst.Connections, connMap[id])
+		}
 	}
 
 	if src.Options != nil {
@@ -146,6 +175,11 @@ func mergeConfig(dst, src *Config) {
 
 func configureProviders(cfg *Config, resolver *Resolver) {
 	knownProviders := cfg.KnownProviders()
+
+	// First, ensure all providers referenced by connections have entries in cfg.Providers.
+	// This handles the case where a connection was added via /models without a legacy provider entry.
+	ensureProvidersFromConnections(cfg, knownProviders)
+
 	for i := range knownProviders {
 		p := &knownProviders[i]
 		userConfig, hasUserConfig := cfg.Providers[string(p.ID)]
@@ -157,6 +191,47 @@ func configureProviders(cfg *Config, resolver *Resolver) {
 		}
 		configureProviderMetadata(userConfig, p)
 		configureProviderModels(userConfig, p)
+	}
+}
+
+// ensureProvidersFromConnections creates provider entries for any providers
+// referenced by connections that don't already exist in cfg.Providers.
+func ensureProvidersFromConnections(cfg *Config, knownProviders []catwalk.Provider) {
+	// Build a map of known providers for quick lookup.
+	knownByID := make(map[string]*catwalk.Provider)
+	for i := range knownProviders {
+		knownByID[string(knownProviders[i].ID)] = &knownProviders[i]
+	}
+
+	for i := range cfg.Connections {
+		if cfg.Connections[i].ProviderID == "" {
+			continue
+		}
+
+		// Skip if provider already exists in cfg.Providers.
+		if _, exists := cfg.Providers[cfg.Connections[i].ProviderID]; exists {
+			continue
+		}
+
+		// Look up the provider in knownProviders.
+		known, ok := knownByID[cfg.Connections[i].ProviderID]
+		if !ok {
+			// Provider not in known list - might be a custom provider.
+			// Create a minimal entry.
+			cfg.Providers[cfg.Connections[i].ProviderID] = &ProviderConfig{
+				ID: cfg.Connections[i].ProviderID,
+			}
+			continue
+		}
+
+		// Create a provider config from the known provider metadata.
+		cfg.Providers[cfg.Connections[i].ProviderID] = &ProviderConfig{
+			ID:      string(known.ID),
+			Name:    known.Name,
+			Type:    known.Type,
+			BaseURL: known.APIEndpoint,
+			Models:  known.Models,
+		}
 	}
 }
 
@@ -260,7 +335,23 @@ func configureDefaultModels(cfg *Config) error {
 }
 
 func validateModels(cfg *Config) error {
-	for tier, model := range cfg.Models {
+	connManager := NewConnectionManager(cfg)
+
+	for tier := range cfg.Models {
+		model := cfg.Models[tier]
+		// If ConnectionID is set, validate via connection (new system).
+		if model.ConnectionID != "" {
+			conn := connManager.Get(model.ConnectionID)
+			if conn == nil {
+				return fmt.Errorf("tier %s: connection %q not found", tier, model.ConnectionID)
+			}
+			if !conn.IsConfigured() {
+				return fmt.Errorf("tier %s: connection %q has no authentication configured", tier, conn.Name)
+			}
+			continue
+		}
+
+		// Fall back to legacy provider validation.
 		provider, ok := cfg.Providers[model.Provider]
 		if !ok {
 			return fmt.Errorf("tier %s: provider %q not configured", tier, model.Provider)
