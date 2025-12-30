@@ -23,12 +23,14 @@ const (
 
 // Message represents a conversation message.
 type Message struct { //nolint:govet // fieldalignment: preserving logical field order
-	ID          string
-	Content     string
-	ToolCalls   []ToolCall
-	ToolResults []ToolResult
-	CreatedAt   time.Time
-	Role        Role
+	ID                string
+	Content           string
+	Reasoning         string                   // Thinking/reasoning content from the model
+	ReasoningMetadata fantasy.ProviderMetadata // Provider-specific metadata (e.g., Claude's signature)
+	ToolCalls         []ToolCall
+	ToolResults       []ToolResult
+	CreatedAt         time.Time
+	Role              Role
 }
 
 // ToolCall represents a tool call made by the assistant.

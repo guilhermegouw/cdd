@@ -126,13 +126,9 @@ func TestSaveToFile_OnlySavesProvidersWithAPIKeyOrOAuth(t *testing.T) {
 func TestSaveWizardResult(t *testing.T) {
 	// Override global config path for testing.
 	tmpDir := t.TempDir()
-	originalConfigDir := os.Getenv("XDG_CONFIG_HOME")
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
-	defer func() {
-		if originalConfigDir != "" {
-			_ = os.Setenv("XDG_CONFIG_HOME", originalConfigDir) //nolint:errcheck // Test cleanup.
-		}
-	}()
+	configPath := filepath.Join(tmpDir, "cdd", "cdd.json")
+	SetGlobalConfigPath(configPath)
+	defer SetGlobalConfigPath("") // Reset after test
 
 	err := SaveWizardResult("openai", "$OPENAI_API_KEY", "gpt-4o", "gpt-4o-mini")
 	if err != nil {
@@ -140,7 +136,6 @@ func TestSaveWizardResult(t *testing.T) {
 	}
 
 	// Verify file was created.
-	configPath := GlobalConfigPath()
 	if _, statErr := os.Stat(configPath); os.IsNotExist(statErr) {
 		t.Fatal("SaveWizardResult() did not create config file")
 	}
@@ -155,13 +150,16 @@ func TestSaveWizardResult(t *testing.T) {
 		t.Fatalf("Failed to parse config file: %v", err)
 	}
 
-	// Verify connection was created.
-	if len(saved.Connections) == 0 {
-		t.Fatal("No connections saved")
+	// Verify connection was created - find by provider ID since order may vary.
+	var conn *Connection
+	for i := range saved.Connections {
+		if saved.Connections[i].ProviderID == "openai" {
+			conn = &saved.Connections[i]
+			break
+		}
 	}
-	conn := saved.Connections[0]
-	if conn.ProviderID != "openai" {
-		t.Errorf("Connection.ProviderID = %q, want %q", conn.ProviderID, "openai")
+	if conn == nil {
+		t.Fatal("No openai connection saved")
 	}
 	if conn.APIKey != "$OPENAI_API_KEY" {
 		t.Errorf("Connection.APIKey = %q, want %q", conn.APIKey, "$OPENAI_API_KEY")
@@ -186,8 +184,11 @@ func TestSaveWizardResult(t *testing.T) {
 }
 
 func TestSaveWizardResultWithOAuth(t *testing.T) {
+	// Override global config path for testing.
 	tmpDir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	configPath := filepath.Join(tmpDir, "cdd", "cdd.json")
+	SetGlobalConfigPath(configPath)
+	defer SetGlobalConfigPath("") // Reset after test
 
 	token := &oauth.Token{
 		AccessToken:  "access-token-123",
@@ -201,7 +202,6 @@ func TestSaveWizardResultWithOAuth(t *testing.T) {
 		t.Fatalf("SaveWizardResultWithOAuth() error = %v", err)
 	}
 
-	configPath := GlobalConfigPath()
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("Failed to read config file: %v", err)
@@ -212,13 +212,16 @@ func TestSaveWizardResultWithOAuth(t *testing.T) {
 		t.Fatalf("Failed to parse config file: %v", err)
 	}
 
-	// Verify connection with OAuth token is saved.
-	if len(saved.Connections) == 0 {
-		t.Fatal("No connections saved")
+	// Verify connection with OAuth token is saved - find by provider ID since order may vary.
+	var conn *Connection
+	for i := range saved.Connections {
+		if saved.Connections[i].ProviderID == "anthropic" {
+			conn = &saved.Connections[i]
+			break
+		}
 	}
-	conn := saved.Connections[0]
-	if conn.ProviderID != "anthropic" {
-		t.Errorf("Connection.ProviderID = %q, want %q", conn.ProviderID, "anthropic")
+	if conn == nil {
+		t.Fatal("No anthropic connection saved")
 	}
 	if conn.OAuthToken == nil {
 		t.Fatal("Connection.OAuthToken not saved")

@@ -191,8 +191,8 @@ func (m *MessageList) updateContent() {
 
 	// Render messages
 	rendered := make([]string, 0, len(m.messages))
-	for _, msg := range m.messages {
-		rendered = append(rendered, m.renderMessage(msg))
+	for i := range m.messages {
+		rendered = append(rendered, m.renderMessage(m.messages[i]))
 	}
 
 	// Join with spacing

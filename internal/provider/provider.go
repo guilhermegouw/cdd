@@ -2,8 +2,10 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"maps"
 	"net/http"
 	"os"
@@ -134,27 +136,7 @@ func (b *Builder) buildModel(ctx context.Context, modelCfg config.SelectedModel)
 
 	// If we have a connection, use its credentials instead of the provider's.
 	if conn != nil {
-		// Create a copy of the provider config with the connection's credentials.
-		providerCfgCopy := *providerCfg
-		if conn.APIKey != "" {
-			providerCfgCopy.APIKey = conn.APIKey
-		}
-		if conn.OAuthToken != nil {
-			providerCfgCopy.OAuthToken = conn.OAuthToken
-			providerCfgCopy.SetupClaudeCode()
-		}
-		if conn.BaseURL != "" {
-			providerCfgCopy.BaseURL = conn.BaseURL
-		}
-		if len(conn.ExtraHeaders) > 0 {
-			if providerCfgCopy.ExtraHeaders == nil {
-				providerCfgCopy.ExtraHeaders = make(map[string]string)
-			}
-			for k, v := range conn.ExtraHeaders {
-				providerCfgCopy.ExtraHeaders[k] = v
-			}
-		}
-		providerCfg = &providerCfgCopy
+		providerCfg = applyConnectionCredentials(providerCfg, conn)
 	}
 
 	// Build or get cached fantasy provider.
@@ -180,6 +162,43 @@ func (b *Builder) buildModel(ctx context.Context, modelCfg config.SelectedModel)
 		CatwalkCfg: catwalkModel,
 		ModelCfg:   modelCfg,
 	}, nil
+}
+
+// applyConnectionCredentials creates a copy of the provider config with connection credentials applied.
+// Environment variables in API key and base URL are resolved.
+func applyConnectionCredentials(providerCfg *config.ProviderConfig, conn *config.Connection) *config.ProviderConfig {
+	providerCfgCopy := *providerCfg
+	resolver := config.NewResolver()
+
+	// Resolve API key (may contain $ENV_VAR references).
+	if conn.APIKey != "" {
+		if resolved, err := resolver.Resolve(conn.APIKey); err == nil {
+			providerCfgCopy.APIKey = resolved
+		} else {
+			providerCfgCopy.APIKey = conn.APIKey // Use as-is if resolution fails
+		}
+	}
+	if conn.OAuthToken != nil {
+		providerCfgCopy.OAuthToken = conn.OAuthToken
+		providerCfgCopy.SetupClaudeCode()
+	}
+	// Resolve base URL (may contain $ENV_VAR references).
+	if conn.BaseURL != "" {
+		if resolved, err := resolver.Resolve(conn.BaseURL); err == nil {
+			providerCfgCopy.BaseURL = resolved
+		} else {
+			providerCfgCopy.BaseURL = conn.BaseURL // Use as-is if resolution fails
+		}
+	}
+	if len(conn.ExtraHeaders) > 0 {
+		if providerCfgCopy.ExtraHeaders == nil {
+			providerCfgCopy.ExtraHeaders = make(map[string]string)
+		}
+		for k, v := range conn.ExtraHeaders {
+			providerCfgCopy.ExtraHeaders[k] = v
+		}
+	}
+	return &providerCfgCopy
 }
 
 // getOrBuildProvider returns a cached provider or builds a new one.
@@ -318,6 +337,16 @@ func (t *oauthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	// Log the API response
 	debug.API(reqCopy.Method, reqCopy.URL.Path, resp.StatusCode, resp.Status)
+
+	// Log error response body for debugging
+	if resp.StatusCode >= 400 {
+		bodyBytes, readErr := io.ReadAll(resp.Body)
+		if readErr == nil {
+			debug.API(reqCopy.Method, reqCopy.URL.Path, resp.StatusCode, fmt.Sprintf("error body: %s", string(bodyBytes)))
+			// Restore the body for the SDK to read
+			resp.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+		}
+	}
 
 	return resp, nil
 }

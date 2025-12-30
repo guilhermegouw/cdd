@@ -11,9 +11,24 @@ import (
 	"github.com/guilhermegouw/cdd/internal/tui/util"
 )
 
+// Custom provider type constants.
+const (
+	CustomProviderOpenAI    = "custom-openai"
+	CustomProviderAnthropic = "custom-anthropic"
+)
+
+// ProviderOption represents a selectable provider option.
+type ProviderOption struct {
+	ID       string
+	Name     string
+	Type     string
+	IsCustom bool
+}
+
 // ProviderPicker displays a list of providers to choose from.
 type ProviderPicker struct {
 	providers []catwalk.Provider
+	options   []ProviderOption
 	cursor    int
 	width     int
 	height    int
@@ -21,10 +36,43 @@ type ProviderPicker struct {
 
 // NewProviderPicker creates a new ProviderPicker.
 func NewProviderPicker(providers []catwalk.Provider) *ProviderPicker {
-	return &ProviderPicker{
+	p := &ProviderPicker{
 		providers: providers,
 		cursor:    0,
 	}
+	p.buildOptions()
+	return p
+}
+
+// buildOptions builds the list of provider options including custom providers.
+func (p *ProviderPicker) buildOptions() {
+	p.options = make([]ProviderOption, 0, len(p.providers)+2)
+
+	// Add standard providers.
+	for i := range p.providers {
+		p.options = append(p.options, ProviderOption{
+			ID:       string(p.providers[i].ID),
+			Name:     p.providers[i].Name,
+			Type:     string(p.providers[i].Type),
+			IsCustom: false,
+		})
+	}
+
+	// Add custom provider options at the end.
+	p.options = append(p.options,
+		ProviderOption{
+			ID:       CustomProviderOpenAI,
+			Name:     "Custom (OpenAI-compatible)",
+			Type:     "openai-compat",
+			IsCustom: true,
+		},
+		ProviderOption{
+			ID:       CustomProviderAnthropic,
+			Name:     "Custom (Anthropic-compatible)",
+			Type:     "anthropic",
+			IsCustom: true,
+		},
+	)
 }
 
 // Reset resets the cursor to the beginning.
@@ -49,18 +97,19 @@ func (p *ProviderPicker) Update(msg tea.Msg) (*ProviderPicker, tea.Cmd) {
 			return p, nil
 
 		case keyDown, "j":
-			if p.cursor < len(p.providers)-1 {
+			if p.cursor < len(p.options)-1 {
 				p.cursor++
 			}
 			return p, nil
 
 		case keyEnter:
-			if p.cursor >= 0 && p.cursor < len(p.providers) {
-				provider := p.providers[p.cursor]
+			if p.cursor >= 0 && p.cursor < len(p.options) {
+				opt := p.options[p.cursor]
 				return p, util.CmdHandler(ProviderSelectedMsg{
-					ProviderID:   string(provider.ID),
-					ProviderName: provider.Name,
-					ProviderType: string(provider.Type),
+					ProviderID:   opt.ID,
+					ProviderName: opt.Name,
+					ProviderType: opt.Type,
+					IsCustom:     opt.IsCustom,
 				})
 			}
 			return p, nil
@@ -74,7 +123,7 @@ func (p *ProviderPicker) Update(msg tea.Msg) (*ProviderPicker, tea.Cmd) {
 func (p *ProviderPicker) View() string {
 	t := styles.CurrentTheme()
 
-	if len(p.providers) == 0 {
+	if len(p.options) == 0 {
 		return t.S().Muted.Render("No providers available.")
 	}
 
@@ -83,9 +132,16 @@ func (p *ProviderPicker) View() string {
 	sb.WriteString(t.S().Muted.Render("Select a provider:"))
 	sb.WriteString("\n\n")
 
-	for i := range p.providers {
+	for i := range p.options {
+		opt := p.options[i]
+
 		// Build line content.
-		line := p.providers[i].Name + " (" + string(p.providers[i].Type) + ")"
+		var line string
+		if opt.IsCustom {
+			line = opt.Name
+		} else {
+			line = opt.Name + " (" + opt.Type + ")"
+		}
 
 		// Render with cursor and styling.
 		if i == p.cursor {

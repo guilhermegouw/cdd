@@ -20,6 +20,7 @@ type SaveConfig struct {
 
 // SaveProviderConfig is a minimal provider config for saving.
 // It stores the API key template (e.g., "$OPENAI_API_KEY") rather than resolved values.
+// Custom providers are stored separately in custom-providers.json via CustomProviderManager.
 type SaveProviderConfig struct {
 	OAuthToken *oauth.Token `json:"oauth,omitempty"`
 	APIKey     string       `json:"api_key,omitempty"`
@@ -46,7 +47,8 @@ func SaveToFile(cfg *Config, path string) error {
 		Options:     cfg.Options,
 	}
 
-	// Only save provider API key templates and OAuth tokens.
+	// Save provider configs (only API key/OAuth for standard providers).
+	// Custom providers are stored separately via CustomProviderManager.
 	for id, p := range cfg.Providers {
 		if p.APIKey != "" || p.OAuthToken != nil {
 			saveCfg.Providers[id] = &SaveProviderConfig{
@@ -90,17 +92,49 @@ func SaveWizardResultWithOAuth(providerID string, token *oauth.Token, largeModel
 	return saveWizardConnection(conn, providerID, largeModel, smallModel)
 }
 
-// saveWizardConnection is a helper that saves a connection and sets model selections.
-func saveWizardConnection(conn Connection, providerID, largeModel, smallModel string) error {
+// loadExistingConfig loads the existing config file without full provider configuration.
+// This is used to preserve connections when adding new ones via wizard.
+func loadExistingConfig() (*Config, error) {
 	cfg := NewConfig()
+	configPath := GlobalConfigPath()
+
+	//nolint:gosec // G304: configPath is from trusted GlobalConfigPath(), not user input.
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("parsing config: %w", err)
+	}
+
+	return cfg, nil
+}
+
+// saveWizardConnection is a helper that saves a connection and sets model selections.
+// It loads existing config to preserve other connections, then adds the new connection.
+func saveWizardConnection(conn Connection, providerID, largeModel, smallModel string) error {
+	// Try to load existing config to preserve other connections.
+	cfg, err := loadExistingConfig()
+	if err != nil {
+		// If loading fails, start fresh (first run scenario).
+		cfg = NewConfig()
+	}
 
 	connManager := NewConnectionManager(cfg)
+
+	// Check if a connection with the same name already exists.
+	// If so, remove it first to allow the new one to be added.
+	if existing := connManager.GetByName(conn.Name); existing != nil {
+		_ = connManager.Delete(existing.ID) //nolint:errcheck // Best effort cleanup.
+	}
+
 	if err := connManager.Add(conn); err != nil {
 		return fmt.Errorf("adding connection: %w", err)
 	}
 
 	// Get the connection ID (Add generates it).
-	addedConn := connManager.GetByName(providerID)
+	addedConn := connManager.GetByName(conn.Name)
 	if addedConn == nil {
 		return fmt.Errorf("failed to retrieve added connection")
 	}
