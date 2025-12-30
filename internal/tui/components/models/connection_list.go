@@ -19,8 +19,7 @@ type ConnectionList struct {
 	cursor       int
 	width        int
 	height       int
-	activeConnLg string // Connection ID for large model
-	activeConnSm string // Connection ID for small model
+	activeConnID string // Connection ID for active (large) model
 }
 
 // NewConnectionList creates a new ConnectionList.
@@ -39,12 +38,9 @@ func (l *ConnectionList) Refresh() {
 		l.cursor = max(0, len(l.connections)-1)
 	}
 
-	// Get active connection IDs.
-	if lg := l.connManager.GetActiveConnection(config.SelectedModelTypeLarge); lg != nil {
-		l.activeConnLg = lg.ID
-	}
-	if sm := l.connManager.GetActiveConnection(config.SelectedModelTypeSmall); sm != nil {
-		l.activeConnSm = sm.ID
+	// Get active connection ID (large model - the only one currently used).
+	if conn := l.connManager.GetActiveConnection(config.SelectedModelTypeLarge); conn != nil {
+		l.activeConnID = conn.ID
 	}
 }
 
@@ -85,12 +81,6 @@ func (l *ConnectionList) Update(msg tea.Msg) (*ConnectionList, tea.Cmd) {
 			}
 			return l, nil
 
-		case "l":
-			return l, util.CmdHandler(SelectLargeModelMsg{})
-
-		case "s":
-			return l, util.CmdHandler(SelectSmallModelMsg{})
-
 		case keyEnter:
 			if len(l.connections) > 0 {
 				return l, util.CmdHandler(ConnectionSelectedMsg{Connection: l.connections[l.cursor]})
@@ -129,23 +119,16 @@ func (l *ConnectionList) View() string {
 		// Provider info in muted.
 		providerInfo := t.S().Muted.Render(fmt.Sprintf(" (%s)", l.connections[i].ProviderID))
 
-		// Active model indicators.
-		var indicators []string
-		if l.connections[i].ID == l.activeConnLg {
-			indicators = append(indicators, t.S().Primary.Render("[L]"))
-		}
-		if l.connections[i].ID == l.activeConnSm {
-			indicators = append(indicators, t.S().Subtitle.Render("[S]"))
-		}
-		indicatorStr := ""
-		if len(indicators) > 0 {
-			indicatorStr = " " + strings.Join(indicators, " ")
+		// Active indicator.
+		indicator := ""
+		if l.connections[i].ID == l.activeConnID {
+			indicator = " " + t.S().Primary.Render("[active]")
 		}
 
 		sb.WriteString(cursor)
 		sb.WriteString(name)
 		sb.WriteString(providerInfo)
-		sb.WriteString(indicatorStr)
+		sb.WriteString(indicator)
 		sb.WriteString("\n")
 	}
 
@@ -159,11 +142,7 @@ func (l *ConnectionList) View() string {
 	sb.WriteString("\n")
 	sb.WriteString(t.S().Muted.Render("  [d] delete selected"))
 	sb.WriteString("\n")
-	sb.WriteString(t.S().Muted.Render("  [l] set as large model"))
-	sb.WriteString("\n")
-	sb.WriteString(t.S().Muted.Render("  [s] set as small model"))
-	sb.WriteString("\n")
-	sb.WriteString(t.S().Muted.Render("  [enter] quick select"))
+	sb.WriteString(t.S().Muted.Render("  [enter] select model"))
 	sb.WriteString("\n")
 	sb.WriteString(t.S().Muted.Render("  [esc] close"))
 

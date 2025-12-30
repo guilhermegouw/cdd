@@ -8,6 +8,7 @@ import (
 	"charm.land/fantasy"
 	"github.com/google/uuid"
 
+	"github.com/guilhermegouw/cdd/internal/debug"
 	"github.com/guilhermegouw/cdd/internal/events"
 	"github.com/guilhermegouw/cdd/internal/pubsub"
 	"github.com/guilhermegouw/cdd/internal/tools"
@@ -122,6 +123,10 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 	var assistantContent string
 	var pendingToolResults []Message // Collect tool results to save AFTER assistant message
 
+	// Track reasoning content (for models like Claude/MiniMax with thinking)
+	var reasoningContent string
+	var reasoningMetadata fantasy.ProviderMetadata
+
 	// Track message ID for events
 	var messageID string
 
@@ -133,9 +138,13 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 				Role:      RoleAssistant,
 				CreatedAt: time.Now(),
 			}
+			debug.Log("[STREAM] New assistant message started id=%s", messageID)
 		}
 		assistantContent += text
 		currentAssistant.Content = assistantContent
+
+		// Debug: Log text deltas (truncated to avoid log spam)
+		debug.Log("[STREAM] TextDelta len=%d preview=%q", len(text), truncate(text, 30))
 
 		// Publish text delta event
 		if a.hub != nil {
@@ -235,17 +244,52 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 		return nil
 	}
 
+	// Reasoning callbacks to capture thinking blocks (Claude/MiniMax)
+	streamOpts.OnReasoningStart = func(id string, reasoning fantasy.ReasoningContent) error {
+		debug.Log("[REASONING] Start id=%s text_preview=%q", id, truncate(reasoning.Text, 100))
+		// Reset reasoning for new block
+		reasoningContent = reasoning.Text
+		return nil
+	}
+
+	streamOpts.OnReasoningDelta = func(id, text string) error {
+		debug.Log("[REASONING] Delta id=%s text=%q", id, truncate(text, 50))
+		reasoningContent += text
+		return nil
+	}
+
+	streamOpts.OnReasoningEnd = func(id string, reasoning fantasy.ReasoningContent) error {
+		debug.Log("[REASONING] End id=%s total_length=%d", id, len(reasoning.Text))
+		// Use the final text from reasoning (may be more complete than accumulated deltas)
+		if reasoning.Text != "" {
+			reasoningContent = reasoning.Text
+		}
+		// Capture provider metadata (includes signature for Claude)
+		if reasoning.ProviderMetadata != nil {
+			reasoningMetadata = reasoning.ProviderMetadata
+		}
+		return nil
+	}
+
 	// Execute the agent
 	_, err := agent.Stream(ctx, streamOpts)
 
+	// Store reasoning in assistant message before saving
+	if currentAssistant != nil && reasoningContent != "" {
+		currentAssistant.Reasoning = reasoningContent
+		currentAssistant.ReasoningMetadata = reasoningMetadata
+		debug.Log("[REASONING] Stored reasoning in message: len=%d hasMetadata=%v",
+			len(reasoningContent), reasoningMetadata != nil)
+	}
+
 	// Save assistant message FIRST (before tool results to maintain correct order)
-	if currentAssistant != nil && (currentAssistant.Content != "" || len(currentAssistant.ToolCalls) > 0) {
+	if currentAssistant != nil && (currentAssistant.Content != "" || len(currentAssistant.ToolCalls) > 0 || currentAssistant.Reasoning != "") {
 		a.sessions.AddMessage(sessionID, *currentAssistant)
 	}
 
 	// Save tool results AFTER assistant message (they reference tool_calls in assistant message)
-	for _, toolMsg := range pendingToolResults {
-		a.sessions.AddMessage(sessionID, toolMsg)
+	for i := range pendingToolResults {
+		a.sessions.AddMessage(sessionID, pendingToolResults[i])
 	}
 
 	if err != nil {
@@ -279,13 +323,17 @@ func (a *DefaultAgent) buildHistory(sessionID string) []fantasy.Message {
 	}
 
 	var history []fantasy.Message
-	for _, msg := range messages {
+	for i := range messages {
+		msg := &messages[i]
 		switch msg.Role {
 		case RoleUser:
 			history = append(history, fantasy.NewUserMessage(msg.Content))
 
 		case RoleAssistant:
 			var parts []fantasy.MessagePart
+			// Skip reasoning content - it contains provider-specific signatures that
+			// become invalid when switching models or OAuth sessions. The thinking
+			// blocks are internal and don't need to be sent back to the model.
 			if msg.Content != "" {
 				parts = append(parts, fantasy.TextPart{Text: msg.Content})
 			}
@@ -400,4 +448,12 @@ func (a *DefaultAgent) clearActiveRequest(sessionID string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	delete(a.activeRequests, sessionID)
+}
+
+// truncate truncates a string to maxLen characters, adding "..." if truncated.
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }

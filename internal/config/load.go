@@ -203,6 +203,8 @@ func ensureProvidersFromConnections(cfg *Config, knownProviders []catwalk.Provid
 		knownByID[string(knownProviders[i].ID)] = &knownProviders[i]
 	}
 
+	resolver := NewResolver()
+
 	for i := range cfg.Connections {
 		if cfg.Connections[i].ProviderID == "" {
 			continue
@@ -224,12 +226,21 @@ func ensureProvidersFromConnections(cfg *Config, knownProviders []catwalk.Provid
 			continue
 		}
 
+		// Resolve the API endpoint (may contain $ENV_VAR references).
+		baseURL := known.APIEndpoint
+		if resolved, err := resolver.Resolve(baseURL); err == nil {
+			baseURL = resolved
+		} else {
+			// Fall back to default endpoint if resolution fails.
+			baseURL = getDefaultAPIEndpoint(known.Type)
+		}
+
 		// Create a provider config from the known provider metadata.
 		cfg.Providers[cfg.Connections[i].ProviderID] = &ProviderConfig{
 			ID:      string(known.ID),
 			Name:    known.Name,
 			Type:    known.Type,
-			BaseURL: known.APIEndpoint,
+			BaseURL: baseURL,
 			Models:  known.Models,
 		}
 	}
@@ -386,9 +397,21 @@ func getDefaultAPIEndpoint(providerType catwalk.Type) string {
 	}
 }
 
+// globalConfigPathOverride allows tests to override the config path.
+// This is necessary because xdg.ConfigHome is cached at init time.
+var globalConfigPathOverride string
+
 // GlobalConfigPath returns the path to the global configuration file.
 func GlobalConfigPath() string {
+	if globalConfigPathOverride != "" {
+		return globalConfigPathOverride
+	}
 	return filepath.Join(xdg.ConfigHome, appName, configFileName)
+}
+
+// SetGlobalConfigPath sets an override for GlobalConfigPath (for testing only).
+func SetGlobalConfigPath(path string) {
+	globalConfigPathOverride = path
 }
 
 // DataDir returns the data directory path from configuration.

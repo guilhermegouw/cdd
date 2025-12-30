@@ -1,7 +1,10 @@
 // Package models provides the models/connections management modal component.
 package models
 
-import "github.com/guilhermegouw/cdd/internal/config"
+import (
+	"github.com/guilhermegouw/cdd/internal/config"
+	"github.com/guilhermegouw/cdd/internal/oauth"
+)
 
 // Modal control messages.
 type (
@@ -69,20 +72,14 @@ type (
 		ProviderID   string
 		ProviderName string
 		ProviderType string
+		IsCustom     bool
 	}
 )
 
 // Model selection messages.
 type (
-	// SelectLargeModelMsg starts the large model selection flow.
-	SelectLargeModelMsg struct{}
-
-	// SelectSmallModelMsg starts the small model selection flow.
-	SelectSmallModelMsg struct{}
-
-	// ModelSelectedMsg is sent when a model is selected for a tier.
+	// ModelSelectedMsg is sent when a model is selected.
 	ModelSelectedMsg struct {
-		Tier         config.SelectedModelType
 		ConnectionID string
 		ModelID      string
 	}
@@ -101,10 +98,31 @@ type (
 type (
 	// FormSubmitMsg is sent when a form is submitted.
 	FormSubmitMsg struct {
-		Name   string
-		APIKey string
+		Name     string
+		APIKey   string
+		BaseURL  string // For custom providers
+		ModelID  string // For custom providers
+		IsCustom bool
 	}
 
 	// FormCancelMsg is sent when a form is cancelled.
 	FormCancelMsg struct{}
+)
+
+// Auth method messages.
+type (
+	// AuthMethodSelectedMsg is sent when an auth method is selected.
+	AuthMethodSelectedMsg struct {
+		UseOAuth bool
+	}
+
+	// OAuthCompleteMsg is sent when OAuth flow completes.
+	OAuthCompleteMsg struct {
+		Token *oauth.Token
+	}
+
+	// OAuthErrorMsg is sent when OAuth flow fails.
+	OAuthErrorMsg struct {
+		Error error
+	}
 )
