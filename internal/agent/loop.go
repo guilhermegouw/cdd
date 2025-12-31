@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -120,11 +121,11 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 
 	// Track current assistant message and tool results
 	var currentAssistant *Message
-	var assistantContent string
-	var pendingToolResults []Message // Collect tool results to save AFTER assistant message
+	var contentBuilder strings.Builder // Use Builder for efficient string concatenation
+	var pendingToolResults []Message   // Collect tool results to save AFTER assistant message
 
 	// Track reasoning content (for models like Claude/MiniMax with thinking)
-	var reasoningContent string
+	var reasoningBuilder strings.Builder // Use Builder for efficient string concatenation
 	var reasoningMetadata fantasy.ProviderMetadata
 
 	// Track message ID for events
@@ -140,8 +141,8 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 			}
 			debug.Log("[STREAM] New assistant message started id=%s", messageID)
 		}
-		assistantContent += text
-		currentAssistant.Content = assistantContent
+		contentBuilder.WriteString(text)
+		currentAssistant.Content = contentBuilder.String()
 
 		// Debug: Log text deltas (truncated to avoid log spam)
 		debug.Log("[STREAM] TextDelta len=%d preview=%q", len(text), truncate(text, 30))
@@ -248,13 +249,14 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 	streamOpts.OnReasoningStart = func(id string, reasoning fantasy.ReasoningContent) error {
 		debug.Log("[REASONING] Start id=%s text_preview=%q", id, truncate(reasoning.Text, 100))
 		// Reset reasoning for new block
-		reasoningContent = reasoning.Text
+		reasoningBuilder.Reset()
+		reasoningBuilder.WriteString(reasoning.Text)
 		return nil
 	}
 
 	streamOpts.OnReasoningDelta = func(id, text string) error {
 		debug.Log("[REASONING] Delta id=%s text=%q", id, truncate(text, 50))
-		reasoningContent += text
+		reasoningBuilder.WriteString(text)
 		return nil
 	}
 
@@ -262,7 +264,8 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 		debug.Log("[REASONING] End id=%s total_length=%d", id, len(reasoning.Text))
 		// Use the final text from reasoning (may be more complete than accumulated deltas)
 		if reasoning.Text != "" {
-			reasoningContent = reasoning.Text
+			reasoningBuilder.Reset()
+			reasoningBuilder.WriteString(reasoning.Text)
 		}
 		// Capture provider metadata (includes signature for Claude)
 		if reasoning.ProviderMetadata != nil {
@@ -275,6 +278,7 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 	_, err := agent.Stream(ctx, streamOpts)
 
 	// Store reasoning in assistant message before saving
+	reasoningContent := reasoningBuilder.String()
 	if currentAssistant != nil && reasoningContent != "" {
 		currentAssistant.Reasoning = reasoningContent
 		currentAssistant.ReasoningMetadata = reasoningMetadata

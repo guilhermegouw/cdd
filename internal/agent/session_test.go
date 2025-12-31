@@ -292,3 +292,64 @@ func TestSessionStoreConcurrency(t *testing.T) {
 		t.Errorf("Expected 10 messages, got %d", len(messages))
 	}
 }
+
+func TestSessionMessageLimit(t *testing.T) {
+	t.Run("messages are trimmed when limit exceeded", func(t *testing.T) {
+		store := NewSessionStore()
+		session := store.Create("Test")
+
+		// Add more messages than the limit
+		for i := 0; i < MaxSessionMessages+50; i++ {
+			store.AddMessage(session.ID, Message{
+				Role:    RoleUser,
+				Content: "Message " + string(rune('A'+i%26)),
+			})
+		}
+
+		messages := store.GetMessages(session.ID)
+		if len(messages) != MaxSessionMessages {
+			t.Errorf("Expected %d messages (limit), got %d", MaxSessionMessages, len(messages))
+		}
+
+		// First message should be the 51st one we added (oldest 50 were trimmed)
+		if messages[0].Content != "Message Y" {
+			t.Errorf("Expected first message to be 'Message Y' (after trim), got %q", messages[0].Content)
+		}
+	})
+
+	t.Run("messages below limit are not trimmed", func(t *testing.T) {
+		store := NewSessionStore()
+		session := store.Create("Test")
+
+		// Add fewer messages than the limit
+		for i := 0; i < 10; i++ {
+			store.AddMessage(session.ID, Message{
+				Role:    RoleUser,
+				Content: "Message",
+			})
+		}
+
+		messages := store.GetMessages(session.ID)
+		if len(messages) != 10 {
+			t.Errorf("Expected 10 messages, got %d", len(messages))
+		}
+	})
+
+	t.Run("exactly at limit is preserved", func(t *testing.T) {
+		store := NewSessionStore()
+		session := store.Create("Test")
+
+		// Add exactly MaxSessionMessages
+		for i := 0; i < MaxSessionMessages; i++ {
+			store.AddMessage(session.ID, Message{
+				Role:    RoleUser,
+				Content: "Message",
+			})
+		}
+
+		messages := store.GetMessages(session.ID)
+		if len(messages) != MaxSessionMessages {
+			t.Errorf("Expected %d messages, got %d", MaxSessionMessages, len(messages))
+		}
+	})
+}

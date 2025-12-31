@@ -7,6 +7,11 @@ import (
 	"github.com/google/uuid"
 )
 
+// MaxSessionMessages is the maximum number of messages to keep per session.
+// This prevents unbounded memory growth in long-running sessions.
+// Older messages are trimmed when this limit is exceeded.
+const MaxSessionMessages = 100
+
 // Session represents a conversation session.
 type Session struct { //nolint:govet // fieldalignment: preserving logical field order
 	ID        string
@@ -117,6 +122,7 @@ func (s *SessionStore) Delete(id string) bool {
 }
 
 // AddMessage adds a message to a session.
+// If the session exceeds MaxSessionMessages, older messages are trimmed.
 func (s *SessionStore) AddMessage(sessionID string, msg Message) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -134,6 +140,14 @@ func (s *SessionStore) AddMessage(sessionID string, msg Message) bool {
 	}
 
 	session.Messages = append(session.Messages, msg)
+
+	// Trim old messages if we exceed the limit
+	if len(session.Messages) > MaxSessionMessages {
+		// Keep the most recent messages
+		excess := len(session.Messages) - MaxSessionMessages
+		session.Messages = session.Messages[excess:]
+	}
+
 	session.UpdatedAt = time.Now()
 
 	return true
