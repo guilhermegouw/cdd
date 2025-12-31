@@ -12,7 +12,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"sync"
 
 	"charm.land/fantasy"
 )
@@ -56,35 +55,34 @@ type grepMatch struct {
 	charNum  int
 }
 
+// RegexCacheCapacity is the maximum number of compiled regex patterns to cache.
+// This prevents unbounded memory growth with many unique search patterns.
+const RegexCacheCapacity = 50
+
 // regexCache provides thread-safe caching of compiled regex patterns.
-var (
-	regexCacheMap   = make(map[string]*regexp.Regexp)
-	regexCacheMutex sync.RWMutex
-)
+var regexCache = NewLRUCache[string, *regexp.Regexp](RegexCacheCapacity)
 
 func getCachedRegex(pattern string) (*regexp.Regexp, error) {
-	regexCacheMutex.RLock()
-	if regex, exists := regexCacheMap[pattern]; exists {
-		regexCacheMutex.RUnlock()
-		return regex, nil
-	}
-	regexCacheMutex.RUnlock()
-
-	regexCacheMutex.Lock()
-	defer regexCacheMutex.Unlock()
-
-	// Double-check
-	if regex, exists := regexCacheMap[pattern]; exists {
+	// Check cache first
+	if regex, exists := regexCache.Get(pattern); exists {
 		return regex, nil
 	}
 
+	// Compile and cache
 	regex, err := regexp.Compile(pattern)
 	if err != nil {
 		return nil, err
 	}
 
-	regexCacheMap[pattern] = regex
+	regexCache.Put(pattern, regex)
 	return regex, nil
+}
+
+// RegexCacheMetrics returns hit/miss statistics for the regex cache.
+func RegexCacheMetrics() (hits, misses int64, size int) {
+	hits, misses = regexCache.Metrics()
+	size = regexCache.Len()
+	return
 }
 
 // NewGrepTool creates a new grep tool.
@@ -219,14 +217,10 @@ func searchFiles(ctx context.Context, pattern, rootPath, include string, limit i
 			return nil
 		}
 
-		// Only search text files
-		if !isTextFile(path) {
-			return nil
-		}
-
-		match, lineNum, charNum, lineText, err := fileContainsPattern(path, regex)
+		// Search file for pattern (combines text detection and pattern search in single read)
+		match, lineNum, charNum, lineText, err := searchTextFile(path, regex)
 		if err != nil || !match {
-			return nil //nolint:nilerr // Skip files with read errors, continue walking
+			return nil //nolint:nilerr // Skip files with read errors or non-text files, continue walking
 		}
 
 		matches = append(matches, grepMatch{
@@ -261,13 +255,41 @@ func searchFiles(ctx context.Context, pattern, rootPath, include string, limit i
 	return matches, truncated, nil
 }
 
-func fileContainsPattern(filePath string, pattern *regexp.Regexp) (found bool, lineNum, charNum int, lineText string, err error) {
+// searchTextFile opens a file once, checks if it's a text file, and searches for a pattern.
+// This combines MIME detection and pattern search in a single file read for efficiency.
+// Returns (false, 0, 0, "", nil) for non-text files (not an error).
+func searchTextFile(filePath string, pattern *regexp.Regexp) (found bool, lineNum, charNum int, lineText string, err error) {
 	file, err := os.Open(filePath) //nolint:gosec // G304: File path comes from directory walk
 	if err != nil {
 		return false, 0, 0, "", err
 	}
 	defer file.Close() //nolint:errcheck // Error on close for read-only file is ignorable
 
+	// Read first 512 bytes for MIME type detection
+	header := make([]byte, 512)
+	n, err := file.Read(header)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return false, 0, 0, "", err
+	}
+
+	// Check if it's a text file
+	contentType := http.DetectContentType(header[:n])
+	isText := strings.HasPrefix(contentType, "text/") ||
+		contentType == "application/json" ||
+		contentType == "application/xml" ||
+		contentType == "application/javascript" ||
+		contentType == "application/x-sh"
+
+	if !isText {
+		return false, 0, 0, "", nil // Not a text file, not an error
+	}
+
+	// Seek back to beginning to search the entire file
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return false, 0, 0, "", err
+	}
+
+	// Now search for pattern
 	scanner := bufio.NewScanner(file)
 	// Increase buffer size for large lines
 	buf := make([]byte, 0, 64*1024)
@@ -284,29 +306,6 @@ func fileContainsPattern(filePath string, pattern *regexp.Regexp) (found bool, l
 	}
 
 	return false, 0, 0, "", scanner.Err()
-}
-
-func isTextFile(filePath string) bool {
-	file, err := os.Open(filePath) //nolint:gosec // G304: File path comes from directory walk
-	if err != nil {
-		return false
-	}
-	defer file.Close() //nolint:errcheck // Error on close for read-only file is ignorable
-
-	// Read first 512 bytes for MIME type detection
-	buffer := make([]byte, 512)
-	n, err := file.Read(buffer)
-	if err != nil && !errors.Is(err, io.EOF) {
-		return false
-	}
-
-	contentType := http.DetectContentType(buffer[:n])
-
-	return strings.HasPrefix(contentType, "text/") ||
-		contentType == "application/json" ||
-		contentType == "application/xml" ||
-		contentType == "application/javascript" ||
-		contentType == "application/x-sh"
 }
 
 func globToRegex(glob string) string {

@@ -24,6 +24,11 @@ type MessageList struct { //nolint:govet // fieldalignment: preserving logical f
 	height     int
 	ready      bool
 
+	// Render cache for incremental rendering
+	renderCache      map[string]string // message ID -> rendered content
+	cachedWidth      int               // width used for cached renders (invalidate on resize)
+	lastMessageCount int               // track message count for cache invalidation
+
 	// Selection state
 	selectionStartCol  int
 	selectionStartLine int
@@ -38,6 +43,7 @@ func NewMessageList() *MessageList {
 	return &MessageList{
 		messages:           []agent.Message{},
 		mdRenderer:         NewMarkdownRenderer(),
+		renderCache:        make(map[string]string),
 		selectionStartCol:  -1,
 		selectionStartLine: -1,
 		selectionEndCol:    -1,
@@ -169,6 +175,7 @@ func (m *MessageList) ScrollToBottom() {
 }
 
 // updateContent re-renders all messages and updates the viewport.
+// Uses incremental rendering: only re-renders changed messages.
 func (m *MessageList) updateContent() {
 	if !m.ready {
 		return
@@ -183,17 +190,48 @@ func (m *MessageList) updateContent() {
 		debug.Event("messages", "EmptyContent", fmt.Sprintf("width=%d height=%d contentLines=%d", m.width, m.height, contentLines))
 		m.viewport.SetContent(content)
 		m.renderedContent = ""
+		m.renderCache = make(map[string]string)
 		return
+	}
+
+	// Invalidate cache if width changed
+	if m.cachedWidth != m.width {
+		m.renderCache = make(map[string]string)
+		m.cachedWidth = m.width
+		debug.Event("messages", "CacheInvalidated", fmt.Sprintf("width changed to %d", m.width))
 	}
 
 	// Check if we were at the bottom before updating
 	wasAtBottom := m.viewport.AtBottom()
 
-	// Render messages
+	// Render messages with caching
 	rendered := make([]string, 0, len(m.messages))
 	for i := range m.messages {
-		rendered = append(rendered, m.renderMessage(m.messages[i]))
+		msg := m.messages[i]
+		isLastMessage := i == len(m.messages)-1
+
+		// Use cached render if available and not the last message (which may be streaming)
+		if cached, ok := m.renderCache[msg.ID]; ok && !isLastMessage {
+			rendered = append(rendered, cached)
+			continue
+		}
+
+		// Render the message
+		renderedMsg := m.renderMessage(msg)
+
+		// Cache it (but don't cache empty last message - it's still streaming)
+		if msg.ID != "" && (!isLastMessage || msg.Content != "") {
+			m.renderCache[msg.ID] = renderedMsg
+		}
+
+		rendered = append(rendered, renderedMsg)
 	}
+
+	// Clean up cache for removed messages
+	if len(m.messages) < m.lastMessageCount {
+		m.cleanupCache()
+	}
+	m.lastMessageCount = len(m.messages)
 
 	// Join with spacing
 	content := strings.Join(rendered, "\n\n")
@@ -213,6 +251,24 @@ func (m *MessageList) updateContent() {
 	// This preserves scroll position when user is reading earlier content
 	if wasAtBottom {
 		m.viewport.GotoBottom()
+	}
+}
+
+// cleanupCache removes cached renders for messages that no longer exist.
+func (m *MessageList) cleanupCache() {
+	// Build set of current message IDs
+	currentIDs := make(map[string]struct{}, len(m.messages))
+	for i := range m.messages {
+		if m.messages[i].ID != "" {
+			currentIDs[m.messages[i].ID] = struct{}{}
+		}
+	}
+
+	// Remove cached renders for messages that no longer exist
+	for id := range m.renderCache {
+		if _, exists := currentIDs[id]; !exists {
+			delete(m.renderCache, id)
+		}
 	}
 }
 

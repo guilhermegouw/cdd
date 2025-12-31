@@ -5,7 +5,6 @@ import (
 	"context"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -109,30 +108,25 @@ type FileRecord struct { //nolint:govet // fieldalignment: preserving logical fi
 	WriteTime time.Time
 }
 
-var (
-	fileRecords     = make(map[string]FileRecord)
-	fileRecordMutex sync.RWMutex
-)
+// FileRecordsCacheCapacity is the maximum number of file records to keep in cache.
+// This prevents unbounded memory growth in long-running sessions.
+const FileRecordsCacheCapacity = 1000
+
+var fileRecordsCache = NewLRUCache[string, FileRecord](FileRecordsCacheCapacity)
 
 // RecordFileRead records that a file was read.
 func RecordFileRead(path string) {
-	fileRecordMutex.Lock()
-	defer fileRecordMutex.Unlock()
-
-	record, exists := fileRecords[path]
+	record, exists := fileRecordsCache.Get(path)
 	if !exists {
 		record = FileRecord{Path: path}
 	}
 	record.ReadTime = time.Now()
-	fileRecords[path] = record
+	fileRecordsCache.Put(path, record)
 }
 
 // GetLastReadTime returns the last time a file was read.
 func GetLastReadTime(path string) time.Time {
-	fileRecordMutex.RLock()
-	defer fileRecordMutex.RUnlock()
-
-	record, exists := fileRecords[path]
+	record, exists := fileRecordsCache.Get(path)
 	if !exists {
 		return time.Time{}
 	}
@@ -141,23 +135,17 @@ func GetLastReadTime(path string) time.Time {
 
 // RecordFileWrite records that a file was written.
 func RecordFileWrite(path string) {
-	fileRecordMutex.Lock()
-	defer fileRecordMutex.Unlock()
-
-	record, exists := fileRecords[path]
+	record, exists := fileRecordsCache.Get(path)
 	if !exists {
 		record = FileRecord{Path: path}
 	}
 	record.WriteTime = time.Now()
-	fileRecords[path] = record
+	fileRecordsCache.Put(path, record)
 }
 
 // GetLastWriteTime returns the last time a file was written.
 func GetLastWriteTime(path string) time.Time {
-	fileRecordMutex.RLock()
-	defer fileRecordMutex.RUnlock()
-
-	record, exists := fileRecords[path]
+	record, exists := fileRecordsCache.Get(path)
 	if !exists {
 		return time.Time{}
 	}
@@ -166,7 +154,12 @@ func GetLastWriteTime(path string) time.Time {
 
 // ClearFileRecords clears all file records.
 func ClearFileRecords() {
-	fileRecordMutex.Lock()
-	defer fileRecordMutex.Unlock()
-	fileRecords = make(map[string]FileRecord)
+	fileRecordsCache.Clear()
+}
+
+// FileRecordsCacheMetrics returns hit/miss statistics for the file records cache.
+func FileRecordsCacheMetrics() (hits, misses int64, size int) {
+	hits, misses = fileRecordsCache.Metrics()
+	size = fileRecordsCache.Len()
+	return
 }
