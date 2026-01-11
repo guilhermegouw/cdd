@@ -25,7 +25,7 @@ type DefaultAgent struct { //nolint:govet // fieldalignment: preserving logical 
 	systemPrompt   string
 	tools          []fantasy.AgentTool
 	workingDir     string
-	sessions       *SessionStore
+	sessions       Sessions
 	activeRequests map[string]context.CancelFunc
 	hub            *pubsub.Hub
 	mu             sync.RWMutex
@@ -33,12 +33,19 @@ type DefaultAgent struct { //nolint:govet // fieldalignment: preserving logical 
 
 // New creates a new agent with the given configuration.
 func New(cfg Config) *DefaultAgent {
+	var sessions Sessions
+	if cfg.Sessions != nil {
+		sessions = cfg.Sessions
+	} else {
+		sessions = NewSessionStore()
+	}
+
 	return &DefaultAgent{
 		model:          cfg.Model,
 		systemPrompt:   cfg.SystemPrompt,
 		tools:          cfg.Tools,
 		workingDir:     cfg.WorkingDir,
-		sessions:       NewSessionStore(),
+		sessions:       sessions,
 		activeRequests: make(map[string]context.CancelFunc),
 		hub:            cfg.Hub,
 	}
@@ -438,7 +445,7 @@ func (a *DefaultAgent) IsBusy(sessionID string) bool {
 }
 
 // Sessions returns the session store.
-func (a *DefaultAgent) Sessions() *SessionStore {
+func (a *DefaultAgent) Sessions() Sessions {
 	return a.sessions
 }
 

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -19,8 +20,10 @@ import (
 	"github.com/guilhermegouw/cdd/internal/debug"
 	"github.com/guilhermegouw/cdd/internal/events"
 	"github.com/guilhermegouw/cdd/internal/pubsub"
+	"github.com/guilhermegouw/cdd/internal/session"
 	"github.com/guilhermegouw/cdd/internal/tools"
 	"github.com/guilhermegouw/cdd/internal/tui/components/models"
+	"github.com/guilhermegouw/cdd/internal/tui/components/sessions"
 	"github.com/guilhermegouw/cdd/internal/tui/styles"
 	"github.com/guilhermegouw/cdd/internal/tui/util"
 )
@@ -65,6 +68,8 @@ type Model struct {
 	modelFactory    ModelFactory
 	commandRegistry *CommandRegistry
 	modelsModal     *models.Modal
+	sessionsModal   *sessions.Modal
+	sessionSvc      *session.Service
 	messages        *MessageList
 	activity        *ActivityPanel
 	todoPanel       *TodoPanel
@@ -119,6 +124,12 @@ func (m *Model) SetConfig(cfg *config.Config, providers []catwalk.Provider) {
 	m.modelsModal = models.New(cfg, providers)
 }
 
+// SetSessionService sets the session service for the sessions modal.
+func (m *Model) SetSessionService(svc *session.Service) {
+	m.sessionSvc = svc
+	m.sessionsModal = sessions.New(svc)
+}
+
 // isAuthError checks if the error is an authentication-related HTTP error.
 // Only 401 and 403 indicate token issues. 400 is NOT included because it
 // can indicate many things (invalid request format, message history issues, etc).
@@ -158,6 +169,15 @@ func (m *Model) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	if m.modelsModal != nil && m.modelsModal.IsVisible() {
 		var cmd tea.Cmd
 		m.modelsModal, cmd = m.modelsModal.Update(msg)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return m, tea.Batch(cmds...)
+	}
+
+	if m.sessionsModal != nil && m.sessionsModal.IsVisible() {
+		var cmd tea.Cmd
+		m.sessionsModal, cmd = m.sessionsModal.Update(msg)
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
@@ -313,6 +333,32 @@ func (m *Model) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 
 	case UnknownCommandMsg:
 		return m, util.ReportWarn(fmt.Sprintf("Unknown command: /%s", msg.Command))
+
+	case OpenSessionsModalMsg:
+		if m.sessionsModal == nil {
+			return m, util.ReportWarn("Sessions modal not configured. Please set session service first.")
+		}
+		m.sessionsModal.Show()
+		m.sessionsModal.SetSize(m.width, m.height)
+		m.input.Disable()
+		return m, m.sessionsModal.Init()
+
+	case sessions.ModalClosedMsg:
+		debug.Event("chat", "SessionsModalClosedMsg", "enabling input")
+		m.input.Enable()
+		return m, m.input.Focus()
+
+	case sessions.SwitchSessionMsg:
+		// Switch to the selected session
+		return m.switchSession(msg.SessionID)
+
+	case sessions.RequestTitleGenerationMsg:
+		// Request LLM to generate a title for the session
+		return m.generateSessionTitle(msg.SessionID)
+
+	case sessions.ExportMarkdownMsg:
+		// Export session to markdown
+		return m.exportSessionToMarkdown(msg.SessionID)
 	}
 
 	// Update messages (for viewport scrolling)
@@ -495,8 +541,13 @@ func (m *Model) View() string {
 
 	// If modal is visible, render it on top (check FIRST to avoid building chat view).
 	if m.modelsModal != nil && m.modelsModal.IsVisible() {
-		debug.Event("chat", "View", "rendering modal")
+		debug.Event("chat", "View", "rendering models modal")
 		return m.modelsModal.View()
+	}
+
+	if m.sessionsModal != nil && m.sessionsModal.IsVisible() {
+		debug.Event("chat", "View", "rendering sessions modal")
+		return m.sessionsModal.View()
 	}
 
 	debug.Event("chat", "View", fmt.Sprintf("rendering chat width=%d height=%d inputHeight=%d statusHeight=1 msgAreaHeight=%d", m.width, m.height, m.input.Height(), m.messagesAreaHeight()))
@@ -564,6 +615,9 @@ func (m *Model) SetSize(width, height int) {
 	if m.modelsModal != nil {
 		m.modelsModal.SetSize(width, height)
 	}
+	if m.sessionsModal != nil {
+		m.sessionsModal.SetSize(width, height)
+	}
 }
 
 // messagesAreaHeight calculates the current height of the messages area.
@@ -595,6 +649,9 @@ func (m *Model) Cursor() *tea.Cursor {
 	// If modal is visible, return its cursor
 	if m.modelsModal != nil && m.modelsModal.IsVisible() {
 		return m.modelsModal.Cursor()
+	}
+	if m.sessionsModal != nil && m.sessionsModal.IsVisible() {
+		return m.sessionsModal.Cursor()
 	}
 	if !m.isStreaming {
 		return m.input.Cursor()
@@ -730,4 +787,102 @@ func (m *Model) handleTodoEvent(event pubsub.Event[events.TodoEvent]) (util.Mode
 	}
 
 	return m, nil
+}
+
+// switchSession switches to a different session.
+func (m *Model) switchSession(sessionID string) (util.Model, tea.Cmd) {
+	if m.agent == nil {
+		return m, util.ReportError(fmt.Errorf("agent not initialized"))
+	}
+
+	// Set the new session as current
+	sessions := m.agent.Sessions()
+	if !sessions.SetCurrent(sessionID) {
+		return m, util.ReportError(fmt.Errorf("session not found: %s", sessionID))
+	}
+
+	// Get the session and load its messages
+	sess, ok := sessions.Get(sessionID)
+	if !ok {
+		return m, util.ReportError(fmt.Errorf("failed to load session: %s", sessionID))
+	}
+
+	// Update the chat state
+	m.sessionID = sessionID
+	m.messages.SetMessages(sess.Messages)
+
+	// Clear activity and todo panels
+	m.activity.Clear()
+	m.todoPanel.Clear()
+
+	title := sess.Title
+	if title == "" || title == "New Session" {
+		title = fmt.Sprintf("Session %s...", sessionID[:8])
+	}
+
+	return m, util.ReportSuccess(fmt.Sprintf("Switched to: %s", title))
+}
+
+// generateSessionTitle requests the LLM to generate a title for the session.
+func (m *Model) generateSessionTitle(sessionID string) (util.Model, tea.Cmd) {
+	// TODO: Implement LLM-based title generation
+	// This would involve:
+	// 1. Getting the first few messages from the session
+	// 2. Sending a prompt to the LLM asking for a title summary
+	// 3. Updating the session title with the result
+	return m, util.ReportWarn("Title generation not yet implemented")
+}
+
+// exportSessionToMarkdown exports a session to a markdown file.
+func (m *Model) exportSessionToMarkdown(sessionID string) (util.Model, tea.Cmd) {
+	if m.agent == nil {
+		return m, util.ReportError(fmt.Errorf("agent not initialized"))
+	}
+
+	sessions := m.agent.Sessions()
+	sess, ok := sessions.Get(sessionID)
+	if !ok {
+		return m, util.ReportError(fmt.Errorf("session not found: %s", sessionID))
+	}
+
+	// Build markdown content
+	var sb strings.Builder
+	title := sess.Title
+	if title == "" || title == "New Session" {
+		title = fmt.Sprintf("Session %s", sessionID[:8])
+	}
+
+	sb.WriteString(fmt.Sprintf("# %s\n\n", title))
+	sb.WriteString(fmt.Sprintf("*Exported: %s*\n\n---\n\n", sess.UpdatedAt.Format("2006-01-02 15:04")))
+
+	for _, msg := range sess.Messages {
+		switch msg.Role {
+		case agent.RoleUser:
+			sb.WriteString("## You\n\n")
+			sb.WriteString(msg.Content)
+			sb.WriteString("\n\n")
+		case agent.RoleAssistant:
+			sb.WriteString("## Assistant\n\n")
+			sb.WriteString(msg.Content)
+			sb.WriteString("\n\n")
+		case agent.RoleTool:
+			// Skip tool results in export or show them collapsed
+			for _, tr := range msg.ToolResults {
+				sb.WriteString(fmt.Sprintf("<details>\n<summary>Tool: %s</summary>\n\n```\n%s\n```\n</details>\n\n", tr.Name, tr.Content))
+			}
+		}
+	}
+
+	// Write to file
+	filename := fmt.Sprintf("session-%s.md", sessionID[:8])
+	if err := writeFile(filename, sb.String()); err != nil {
+		return m, util.ReportError(fmt.Errorf("failed to export: %w", err))
+	}
+
+	return m, util.ReportSuccess(fmt.Sprintf("Exported to %s", filename))
+}
+
+// writeFile writes content to a file.
+func writeFile(filename, content string) error {
+	return os.WriteFile(filename, []byte(content), 0o644) //nolint:gosec // User-initiated export
 }
