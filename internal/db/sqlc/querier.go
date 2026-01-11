@@ -6,7 +6,6 @@ package sqlc
 
 import (
 	"context"
-	"database/sql"
 )
 
 type Querier interface {
@@ -26,8 +25,8 @@ type Querier interface {
 	GetSummaryMessage(ctx context.Context, sessionID string) (Message, error)
 	ListSessions(ctx context.Context) ([]Session, error)
 	ListSessionsWithPreview(ctx context.Context) ([]ListSessionsWithPreviewRow, error)
-	SearchSessions(ctx context.Context, dollar_1 sql.NullString) ([]Session, error)
-	SearchSessionsWithPreview(ctx context.Context, dollar_1 sql.NullString) ([]SearchSessionsWithPreviewRow, error)
+	SearchSessions(ctx context.Context, lower string) ([]Session, error)
+	SearchSessionsWithPreview(ctx context.Context, lower string) ([]SearchSessionsWithPreviewRow, error)
 	SetSessionSummary(ctx context.Context, arg SetSessionSummaryParams) error
 	UpdateMessageParts(ctx context.Context, arg UpdateMessagePartsParams) error
 	UpdateSessionMessageCount(ctx context.Context, arg UpdateSessionMessageCountParams) error

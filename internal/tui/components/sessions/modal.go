@@ -32,6 +32,7 @@ const (
 type Modal struct {
 	sessionSvc     *session.Service
 	sessionList    *SessionList
+	preview        *Preview
 	renameInput    *RenameInput
 	step           ModalStep
 	visible        bool
@@ -51,6 +52,7 @@ func New(sessionSvc *session.Service) *Modal {
 	}
 
 	m.sessionList = NewSessionList(sessionSvc)
+	m.preview = NewPreview()
 	m.renameInput = NewRenameInput()
 
 	return m
@@ -62,6 +64,8 @@ func (m *Modal) Init() tea.Cmd {
 	m.step = StepList
 	debug.Log("Modal.Init: calling sessionList.Refresh")
 	m.sessionList.Refresh()
+	// Set initial preview
+	m.preview.SetSession(m.sessionList.Selected())
 	debug.Log("Modal.Init: done, sessions count=%d", len(m.sessionList.sessions))
 	return nil
 }
@@ -73,6 +77,8 @@ func (m *Modal) Show() {
 	m.step = StepList
 	debug.Log("Modal.Show: calling sessionList.Refresh")
 	m.sessionList.Refresh()
+	// Set initial preview
+	m.preview.SetSession(m.sessionList.Selected())
 	debug.Log("Modal.Show: done, sessions count=%d", len(m.sessionList.sessions))
 }
 
@@ -94,10 +100,16 @@ func (m *Modal) SetSize(width, height int) {
 	m.height = height
 
 	// Update sub-component sizes.
-	innerWidth := min(width-10, 80)
+	// Modal is now wider to accommodate split view
+	innerWidth := min(width-10, 110)
 	innerHeight := height - 12
 
-	m.sessionList.SetSize(innerWidth, innerHeight)
+	// Split width: 55% for list, 45% for preview
+	listWidth := (innerWidth * 55) / 100
+	previewWidth := innerWidth - listWidth - 3 // -3 for divider
+
+	m.sessionList.SetSize(listWidth, innerHeight)
+	m.preview.SetSize(previewWidth, innerHeight)
 	m.renameInput.SetWidth(innerWidth - 4)
 }
 
@@ -188,6 +200,10 @@ func (m *Modal) updateList(msg tea.Msg) (*Modal, tea.Cmd) {
 	// Update list component.
 	var cmd tea.Cmd
 	m.sessionList, cmd = m.sessionList.Update(msg)
+
+	// Update preview with selected session
+	m.preview.SetSession(m.sessionList.Selected())
+
 	return m, cmd
 }
 
@@ -267,28 +283,31 @@ func (m *Modal) View() string {
 	var content string
 	var title string
 	var footer string
+	var boxWidth int
 
 	switch m.step {
 	case StepList:
 		title = "Sessions"
-		content = m.sessionList.View()
+		content = m.renderSplitView()
 		footer = m.renderListFooter()
+		boxWidth = min(m.width-4, 110) // Wider for split view
 	case StepRename:
 		title = "Rename Session"
 		content = m.renameInput.View()
 		footer = "[enter] Save  [esc] Cancel"
+		boxWidth = min(m.width-4, 60) // Narrower for simple dialogs
 	case StepDeleteConfirm:
 		title = "Delete Session"
 		content = m.renderDeleteConfirm()
 		footer = "[y] Yes  [n] No  [esc] Cancel"
+		boxWidth = min(m.width-4, 60)
 	case StepExport:
 		title = "Export Session"
 		content = m.renderExportOptions()
 		footer = "[m] Markdown  [esc] Cancel"
+		boxWidth = min(m.width-4, 60)
 	}
 
-	// Build modal box.
-	boxWidth := min(m.width-4, 80)
 	contentWidth := boxWidth - 6
 
 	titleStyle := t.S().Title.
@@ -327,8 +346,69 @@ func (m *Modal) View() string {
 	)
 }
 
+// renderSplitView renders the session list and preview side by side.
+func (m *Modal) renderSplitView() string {
+	t := styles.CurrentTheme()
+
+	// Calculate widths
+	totalWidth := min(m.width-10, 104) // inner width
+	listWidth := (totalWidth * 55) / 100
+	previewWidth := totalWidth - listWidth - 3 // -3 for divider spacing
+
+	var parts []string
+
+	// Search box at top spanning full width
+	if m.sessionList.IsSearchMode() || m.sessionList.HasSearchText() {
+		searchBoxStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(t.BorderFocus).
+			Padding(0, 1).
+			Width(totalWidth)
+
+		parts = append(parts, searchBoxStyle.Render(m.sessionList.SearchInputView()))
+		parts = append(parts, "") // Empty line after search
+	}
+
+	// Update preview with current selection
+	m.preview.SetSession(m.sessionList.Selected())
+
+	// Get list view (without search box)
+	listView := m.sessionList.ViewList()
+	previewView := m.preview.View()
+
+	// Count lines to make divider full height
+	listLines := strings.Count(listView, "\n") + 1
+	previewLines := strings.Count(previewView, "\n") + 1
+	maxLines := max(listLines, previewLines)
+
+	// Create full-height vertical divider
+	dividerStyle := t.S().Muted
+	var dividerLines []string
+	for i := 0; i < maxLines; i++ {
+		dividerLines = append(dividerLines, "│")
+	}
+	divider := dividerStyle.Render(strings.Join(dividerLines, "\n"))
+
+	// Ensure consistent widths
+	listStyle := lipgloss.NewStyle().Width(listWidth)
+	previewStyle := lipgloss.NewStyle().Width(previewWidth)
+
+	// Join list and preview horizontally with divider
+	splitView := lipgloss.JoinHorizontal(lipgloss.Top,
+		listStyle.Render(listView),
+		" "+divider+" ",
+		previewStyle.Render(previewView),
+	)
+
+	parts = append(parts, splitView)
+	return strings.Join(parts, "\n")
+}
+
 func (m *Modal) renderListFooter() string {
-	return "[enter] Open  [n] New  [r] Rename  [d] Delete  [e] Export  [esc] Close"
+	if m.sessionList.IsSearchMode() {
+		return "[enter] Done  [esc] Clear  [↑↓] Navigate"
+	}
+	return "[/] Search  [enter] Open  [n] New  [r] Rename  [d] Delete  [e] Export  [esc] Close"
 }
 
 func (m *Modal) renderDeleteConfirm() string {
@@ -366,6 +446,9 @@ func (m *Modal) renderExportOptions() string {
 func (m *Modal) Cursor() *tea.Cursor {
 	if m.step == StepRename {
 		return m.renameInput.Cursor()
+	}
+	if m.step == StepList && m.sessionList.IsSearchMode() {
+		return m.sessionList.Cursor()
 	}
 	return nil
 }

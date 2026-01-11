@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/guilhermegouw/cdd/internal/db/sqlc"
@@ -159,8 +160,11 @@ func (s *SQLiteStore) ListWithPreview(ctx context.Context) ([]*SessionWithPrevie
 }
 
 // Search searches sessions by title keyword.
+// Supports multi-word search: "bug auth" matches "Authentication Bug Fix"
 func (s *SQLiteStore) Search(ctx context.Context, keyword string) ([]*Session, error) {
-	dbSessions, err := s.queries.SearchSessions(ctx, sql.NullString{String: keyword, Valid: keyword != ""})
+	// Preprocess keyword for multi-word search
+	searchTerm := prepareSearchTerm(keyword)
+	dbSessions, err := s.queries.SearchSessions(ctx, searchTerm)
 	if err != nil {
 		return nil, fmt.Errorf("searching sessions: %w", err)
 	}
@@ -174,8 +178,11 @@ func (s *SQLiteStore) Search(ctx context.Context, keyword string) ([]*Session, e
 }
 
 // SearchWithPreview searches sessions by title with first message preview.
+// Supports multi-word search: "bug auth" matches "Authentication Bug Fix"
 func (s *SQLiteStore) SearchWithPreview(ctx context.Context, keyword string) ([]*SessionWithPreview, error) {
-	dbSessions, err := s.queries.SearchSessionsWithPreview(ctx, sql.NullString{String: keyword, Valid: keyword != ""})
+	// Preprocess keyword for multi-word search
+	searchTerm := prepareSearchTerm(keyword)
+	dbSessions, err := s.queries.SearchSessionsWithPreview(ctx, searchTerm)
 	if err != nil {
 		return nil, fmt.Errorf("searching sessions with preview: %w", err)
 	}
@@ -186,6 +193,19 @@ func (s *SQLiteStore) SearchWithPreview(ctx context.Context, keyword string) ([]
 	}
 
 	return sessions, nil
+}
+
+// prepareSearchTerm converts a search keyword for multi-word matching.
+// "bug auth" becomes "bug%auth" to match titles containing both words.
+func prepareSearchTerm(keyword string) string {
+	// Trim whitespace and replace spaces with % for multi-word matching
+	keyword = strings.TrimSpace(keyword)
+	if keyword == "" {
+		return ""
+	}
+	// Replace multiple spaces with single % and trim
+	parts := strings.Fields(keyword)
+	return strings.Join(parts, "%")
 }
 
 // sessionFromDB converts a database session to a domain session.

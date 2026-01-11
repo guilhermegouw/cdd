@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
@@ -17,22 +18,28 @@ import (
 
 // SessionList displays a list of sessions with navigation.
 type SessionList struct {
-	sessionSvc *session.Service
-	sessions   []*session.SessionWithPreview
-	cursor     int
-	width      int
-	height     int
-	offset     int // Scroll offset
-	searchMode bool
-	searchText string
+	sessionSvc  *session.Service
+	sessions    []*session.SessionWithPreview
+	searchInput textinput.Model
+	cursor      int
+	width       int
+	height      int
+	offset      int // Scroll offset
+	searchMode  bool
+	searchText  string
 }
 
 // NewSessionList creates a new session list.
 func NewSessionList(svc *session.Service) *SessionList {
+	ti := textinput.New()
+	ti.Placeholder = "Search sessions..."
+	ti.CharLimit = 100
+
 	return &SessionList{
-		sessionSvc: svc,
-		cursor:     0,
-		offset:     0,
+		sessionSvc:  svc,
+		searchInput: ti,
+		cursor:      0,
+		offset:      0,
 	}
 }
 
@@ -96,6 +103,11 @@ func (l *SessionList) Selected() *session.SessionWithPreview {
 
 // Update handles messages.
 func (l *SessionList) Update(msg tea.Msg) (*SessionList, tea.Cmd) {
+	// Handle search mode separately
+	if l.searchMode {
+		return l.updateSearchMode(msg)
+	}
+
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch keyMsg.String() {
 		case "up", "k":
@@ -137,10 +149,51 @@ func (l *SessionList) Update(msg tea.Msg) (*SessionList, tea.Cmd) {
 			}
 		case "/":
 			l.searchMode = true
+			l.searchInput.SetValue("")
+			return l, l.searchInput.Focus()
 		}
 	}
 
 	return l, nil
+}
+
+// updateSearchMode handles input when in search mode.
+func (l *SessionList) updateSearchMode(msg tea.Msg) (*SessionList, tea.Cmd) {
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		switch keyMsg.String() {
+		case "esc":
+			// Exit search mode and show all sessions
+			l.searchMode = false
+			l.searchText = ""
+			l.searchInput.SetValue("")
+			l.searchInput.Blur()
+			l.Refresh()
+			return l, nil
+		case "enter":
+			// Exit search mode but keep filtered results
+			l.searchMode = false
+			l.searchInput.Blur()
+			return l, nil
+		case "up", "down":
+			// Allow navigation while searching
+			l.searchMode = false
+			l.searchInput.Blur()
+			return l.Update(msg)
+		}
+	}
+
+	// Update the text input
+	var cmd tea.Cmd
+	l.searchInput, cmd = l.searchInput.Update(msg)
+
+	// Filter sessions as user types
+	newText := l.searchInput.Value()
+	if newText != l.searchText {
+		l.searchText = newText
+		l.Search(newText)
+	}
+
+	return l, cmd
 }
 
 func (l *SessionList) ensureVisible() {
@@ -157,8 +210,13 @@ func (l *SessionList) visibleRows() int {
 	return max(1, (l.height-2)/3)
 }
 
-// View renders the session list.
+// View renders the session list (includes search box for standalone use).
 func (l *SessionList) View() string {
+	return l.ViewList()
+}
+
+// ViewList renders just the session list without the search box.
+func (l *SessionList) ViewList() string {
 	t := styles.CurrentTheme()
 
 	if len(l.sessions) == 0 {
@@ -258,6 +316,29 @@ func (l *SessionList) renderSession(sess *session.SessionWithPreview, selected b
 	}
 
 	return sb.String()
+}
+
+// Cursor returns the cursor for the search input when in search mode.
+func (l *SessionList) Cursor() *tea.Cursor {
+	if l.searchMode {
+		return l.searchInput.Cursor()
+	}
+	return nil
+}
+
+// IsSearchMode returns whether the list is in search mode.
+func (l *SessionList) IsSearchMode() bool {
+	return l.searchMode
+}
+
+// HasSearchText returns whether there is active search text.
+func (l *SessionList) HasSearchText() bool {
+	return l.searchText != ""
+}
+
+// SearchInputView returns just the search input view.
+func (l *SessionList) SearchInputView() string {
+	return l.searchInput.View()
 }
 
 // formatRelativeTime formats a time as a relative string.

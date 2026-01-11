@@ -173,12 +173,12 @@ func (q *Queries) ListSessionsWithPreview(ctx context.Context) ([]ListSessionsWi
 
 const searchSessions = `-- name: SearchSessions :many
 SELECT id, title, message_count, summary_message_id, created_at, updated_at FROM sessions
-WHERE title LIKE '%' || ? || '%'
+WHERE LOWER(title) LIKE '%' || LOWER(?) || '%'
 ORDER BY updated_at DESC
 `
 
-func (q *Queries) SearchSessions(ctx context.Context, dollar_1 sql.NullString) ([]Session, error) {
-	rows, err := q.db.QueryContext(ctx, searchSessions, dollar_1)
+func (q *Queries) SearchSessions(ctx context.Context, lower string) ([]Session, error) {
+	rows, err := q.db.QueryContext(ctx, searchSessions, lower)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +217,7 @@ SELECT
     s.updated_at,
     COALESCE((SELECT m.parts FROM messages m WHERE m.session_id = s.id AND m.role = 'user' ORDER BY m.created_at ASC LIMIT 1), '') as first_message
 FROM sessions s
-WHERE s.title LIKE '%' || ? || '%'
+WHERE LOWER(s.title) LIKE '%' || LOWER(?) || '%'
 ORDER BY s.updated_at DESC
 `
 
@@ -231,8 +231,8 @@ type SearchSessionsWithPreviewRow struct {
 	FirstMessage     interface{}    `json:"first_message"`
 }
 
-func (q *Queries) SearchSessionsWithPreview(ctx context.Context, dollar_1 sql.NullString) ([]SearchSessionsWithPreviewRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchSessionsWithPreview, dollar_1)
+func (q *Queries) SearchSessionsWithPreview(ctx context.Context, lower string) ([]SearchSessionsWithPreviewRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchSessionsWithPreview, lower)
 	if err != nil {
 		return nil, err
 	}

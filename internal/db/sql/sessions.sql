@@ -26,7 +26,7 @@ DELETE FROM sessions WHERE id = ?;
 
 -- name: SearchSessions :many
 SELECT * FROM sessions
-WHERE title LIKE '%' || ? || '%'
+WHERE LOWER(title) LIKE '%' || LOWER(?) || '%'
 ORDER BY updated_at DESC;
 
 -- name: ListSessionsWithPreview :many
@@ -51,5 +51,5 @@ SELECT
     s.updated_at,
     COALESCE((SELECT m.parts FROM messages m WHERE m.session_id = s.id AND m.role = 'user' ORDER BY m.created_at ASC LIMIT 1), '') as first_message
 FROM sessions s
-WHERE s.title LIKE '%' || ? || '%'
+WHERE LOWER(s.title) LIKE '%' || LOWER(?) || '%'
 ORDER BY s.updated_at DESC;
