@@ -14,13 +14,16 @@ import (
 // Preview displays detailed information about a selected session.
 type Preview struct {
 	session *session.SessionWithPreview
+	panel   *BorderedPanel
 	width   int
 	height  int
 }
 
 // NewPreview creates a new session preview panel.
 func NewPreview() *Preview {
-	return &Preview{}
+	return &Preview{
+		panel: NewBorderedPanel(),
+	}
 }
 
 // SetSession sets the session to preview.
@@ -32,6 +35,19 @@ func (p *Preview) SetSession(sess *session.SessionWithPreview) {
 func (p *Preview) SetSize(width, height int) {
 	p.width = width
 	p.height = height
+	p.panel.SetSize(width, height)
+}
+
+// Title returns the title for the preview panel.
+func (p *Preview) Title() string {
+	if p.session == nil {
+		return "Preview"
+	}
+	title := p.session.Title
+	if title == "" || title == "New Session" {
+		return fmt.Sprintf("Session %s", p.session.ID[:12])
+	}
+	return title
 }
 
 // View renders the preview panel.
@@ -39,54 +55,60 @@ func (p *Preview) View() string {
 	t := styles.CurrentTheme()
 
 	if p.session == nil {
-		emptyStyle := t.S().Muted.
-			Width(p.width).
-			Height(p.height).
-			Align(lipgloss.Center, lipgloss.Center)
-		return emptyStyle.Render("Select a session to preview")
+		p.panel.SetTitle("Preview")
+		p.panel.SetContent(t.S().Muted.Render("Select a session to preview"))
+		return p.panel.View()
 	}
 
 	sess := p.session
+
+	// Build content
+	content := p.buildContent(sess)
+
+	// Set panel properties and render
+	p.panel.SetTitle(p.Title())
+	p.panel.SetContent(content)
+	p.panel.SetFocused(false)
+
+	return p.panel.View()
+}
+
+// buildContent generates the content for the preview panel.
+func (p *Preview) buildContent(sess *session.SessionWithPreview) string {
+	t := styles.CurrentTheme()
 	var parts []string
 
-	// Title (full, not truncated)
-	title := sess.Title
-	if title == "" || title == "New Session" {
-		title = fmt.Sprintf("Session %s", sess.ID[:12])
-	}
-	titleStyle := t.S().Primary.Bold(true).Width(p.width)
-	parts = append(parts, titleStyle.Render(title))
-
-	// Horizontal divider under title (full width)
-	dividerStyle := t.S().Muted
-	divider := strings.Repeat("─", p.width)
-	parts = append(parts, dividerStyle.Render(divider))
-	parts = append(parts, "")
-
-	// Metadata
+	// Session metadata
 	metaStyle := t.S().Muted
-	parts = append(parts, metaStyle.Render(fmt.Sprintf("ID: %s", sess.ID[:8])))
-	parts = append(parts, metaStyle.Render(fmt.Sprintf("Created: %s", formatDateTime(sess.CreatedAt))))
-	parts = append(parts, metaStyle.Render(fmt.Sprintf("Updated: %s", formatRelativeTime(sess.UpdatedAt))))
-	parts = append(parts, metaStyle.Render(fmt.Sprintf("Messages: %d", sess.MessageCount)))
-	parts = append(parts, "")
+	parts = append(parts,
+		metaStyle.Render(fmt.Sprintf("ID: %s", sess.ID[:8])),
+		metaStyle.Render(fmt.Sprintf("Created: %s", formatDateTime(sess.CreatedAt))),
+		metaStyle.Render(fmt.Sprintf("Updated: %s", formatRelativeTime(sess.UpdatedAt))),
+		metaStyle.Render(fmt.Sprintf("Messages: %d", sess.MessageCount)),
+		"",
+	)
 
 	// Preview content
+	// Content width is panel width - 4 (borders and padding)
+	contentWidth := p.width - 4
+	if contentWidth < 10 {
+		contentWidth = 10
+	}
+
 	if sess.FirstMessage != "" {
 		previewLabel := t.S().Text.Bold(true).Render("First message:")
-		parts = append(parts, previewLabel)
-		parts = append(parts, "")
+		parts = append(parts, previewLabel, "")
 
 		// Wrap the preview text
 		preview := sess.FirstMessage
 		preview = strings.ReplaceAll(preview, "\n", " ")
-		maxLen := p.width * 3 // Allow ~3 lines of text
+		maxLen := contentWidth * 3 // Allow ~3 lines of text
 		if len(preview) > maxLen {
 			preview = preview[:maxLen-3] + "..."
 		}
 
 		// Word wrap
-		wrapped := wordWrap(preview, p.width-2)
+		wrapped := wordWrap(preview, contentWidth-2)
 		previewStyle := t.S().Text
 		parts = append(parts, previewStyle.Render(wrapped))
 	} else {
@@ -94,15 +116,7 @@ func (p *Preview) View() string {
 		parts = append(parts, noMsgStyle.Render("No messages yet"))
 	}
 
-	content := strings.Join(parts, "\n")
-
-	// Container style
-	containerStyle := lipgloss.NewStyle().
-		Width(p.width).
-		Height(p.height).
-		Padding(0, 1)
-
-	return containerStyle.Render(content)
+	return strings.Join(parts, "\n")
 }
 
 // formatDateTime formats a time as a readable date/time string.
@@ -151,3 +165,6 @@ func wordWrap(text string, width int) string {
 
 	return result.String()
 }
+
+// unused import guard
+var _ = lipgloss.Width

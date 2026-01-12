@@ -1,3 +1,4 @@
+// Package sessions provides session management UI components.
 package sessions
 
 import (
@@ -15,6 +16,14 @@ import (
 	"github.com/guilhermegouw/cdd/internal/tui/styles"
 	"github.com/guilhermegouw/cdd/internal/tui/util"
 )
+
+// Common key constants.
+const (
+	keyEnter = "enter"
+)
+
+// defaultSessionTitle is the placeholder title for new sessions.
+const defaultSessionTitle = "New Session"
 
 // SessionList displays a list of sessions with navigation.
 type SessionList struct {
@@ -102,6 +111,8 @@ func (l *SessionList) Selected() *session.SessionWithPreview {
 }
 
 // Update handles messages.
+//
+//nolint:gocyclo // Complex due to handling many key bindings
 func (l *SessionList) Update(msg tea.Msg) (*SessionList, tea.Cmd) {
 	// Handle search mode separately
 	if l.searchMode {
@@ -126,7 +137,7 @@ func (l *SessionList) Update(msg tea.Msg) (*SessionList, tea.Cmd) {
 		case "end", "G":
 			l.cursor = max(0, len(l.sessions)-1)
 			l.ensureVisible()
-		case "enter":
+		case keyEnter:
 			if selected := l.Selected(); selected != nil {
 				return l, util.CmdHandler(SessionSelectedMsg{SessionID: selected.ID})
 			}
@@ -169,7 +180,7 @@ func (l *SessionList) updateSearchMode(msg tea.Msg) (*SessionList, tea.Cmd) {
 			l.searchInput.Blur()
 			l.Refresh()
 			return l, nil
-		case "enter":
+		case keyEnter:
 			// Exit search mode but keep filtered results
 			l.searchMode = false
 			l.searchInput.Blur()
@@ -268,7 +279,7 @@ func (l *SessionList) renderSession(sess *session.SessionWithPreview, selected b
 
 	// Title line.
 	title := sess.Title
-	if title == "" || title == "New Session" {
+	if title == "" || title == defaultSessionTitle {
 		title = fmt.Sprintf("Session %s...", sess.ID[:8])
 	}
 
@@ -339,6 +350,45 @@ func (l *SessionList) HasSearchText() bool {
 // SearchInputView returns just the search input view.
 func (l *SessionList) SearchInputView() string {
 	return l.searchInput.View()
+}
+
+// Count returns the number of currently visible sessions.
+func (l *SessionList) Count() int {
+	return len(l.sessions)
+}
+
+// TotalCount returns the total number of sessions (used for search display).
+func (l *SessionList) TotalCount() int {
+	if l.searchText == "" {
+		return len(l.sessions)
+	}
+	// When searching, we need to get total from a fresh query
+	ctx := context.Background()
+	all, err := l.sessionSvc.ListWithPreview(ctx)
+	if err != nil {
+		return len(l.sessions)
+	}
+	return len(all)
+}
+
+// SearchText returns the current search text.
+func (l *SessionList) SearchText() string {
+	return l.searchText
+}
+
+// ExitSearchMode exits search mode while keeping filtered results.
+func (l *SessionList) ExitSearchMode() {
+	l.searchMode = false
+	l.searchInput.Blur()
+}
+
+// ClearSearch clears search and returns to showing all sessions.
+func (l *SessionList) ClearSearch() {
+	l.searchMode = false
+	l.searchText = ""
+	l.searchInput.SetValue("")
+	l.searchInput.Blur()
+	l.Refresh()
 }
 
 // formatRelativeTime formats a time as a relative string.

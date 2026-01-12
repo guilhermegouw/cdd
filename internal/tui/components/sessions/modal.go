@@ -34,13 +34,16 @@ type Modal struct {
 	sessionList    *SessionList
 	preview        *Preview
 	renameInput    *RenameInput
+	searchBox      *SearchBox
+	hintBar        *HintBar
+	listPanel      *BorderedPanel
 	step           ModalStep
 	visible        bool
 	width          int
 	height         int
 	deleteTargetID string
 	renameTargetID string
-	searchQuery    string
+	totalSessions  int // Total count before filtering
 }
 
 // New creates a new sessions Modal.
@@ -54,6 +57,9 @@ func New(sessionSvc *session.Service) *Modal {
 	m.sessionList = NewSessionList(sessionSvc)
 	m.preview = NewPreview()
 	m.renameInput = NewRenameInput()
+	m.searchBox = NewSearchBox()
+	m.hintBar = NewHintBar()
+	m.listPanel = NewBorderedPanel()
 
 	return m
 }
@@ -64,9 +70,10 @@ func (m *Modal) Init() tea.Cmd {
 	m.step = StepList
 	debug.Log("Modal.Init: calling sessionList.Refresh")
 	m.sessionList.Refresh()
+	m.totalSessions = m.sessionList.Count()
 	// Set initial preview
 	m.preview.SetSession(m.sessionList.Selected())
-	debug.Log("Modal.Init: done, sessions count=%d", len(m.sessionList.sessions))
+	debug.Log("Modal.Init: done, sessions count=%d", m.sessionList.Count())
 	return nil
 }
 
@@ -77,16 +84,19 @@ func (m *Modal) Show() {
 	m.step = StepList
 	debug.Log("Modal.Show: calling sessionList.Refresh")
 	m.sessionList.Refresh()
+	m.totalSessions = m.sessionList.Count()
 	// Set initial preview
 	m.preview.SetSession(m.sessionList.Selected())
-	debug.Log("Modal.Show: done, sessions count=%d", len(m.sessionList.sessions))
+	m.hintBar.SetMode(HintModeNormal)
+	debug.Log("Modal.Show: done, sessions count=%d", m.sessionList.Count())
 }
 
 // Hide hides the modal.
 func (m *Modal) Hide() {
 	m.visible = false
 	m.renameInput.Reset()
-	m.searchQuery = ""
+	m.searchBox.Hide()
+	m.sessionList.ClearSearch()
 }
 
 // IsVisible returns whether the modal is visible.
@@ -99,18 +109,28 @@ func (m *Modal) SetSize(width, height int) {
 	m.width = width
 	m.height = height
 
-	// Update sub-component sizes.
-	// Modal is now wider to accommodate split view
-	innerWidth := min(width-10, 110)
-	innerHeight := height - 12
+	// Calculate total content width (max 110, centered)
+	totalWidth := min(width-4, 110)
 
-	// Split width: 55% for list, 45% for preview
-	listWidth := (innerWidth * 55) / 100
-	previewWidth := innerWidth - listWidth - 3 // -3 for divider
+	// Height calculation:
+	// - Hint bar: 1 line
+	// - Search box (when visible): 3 lines
+	// - Panels: remaining height
+	panelHeight := height - 4 // -2 for hint bar padding, -2 for margins
+	if m.searchBox.IsVisible() {
+		panelHeight -= 4 // Search box height + spacing
+	}
 
-	m.sessionList.SetSize(listWidth, innerHeight)
-	m.preview.SetSize(previewWidth, innerHeight)
-	m.renameInput.SetWidth(innerWidth - 4)
+	// Split width: 50% for list, 50% for preview (no divider needed)
+	listWidth := totalWidth / 2
+	previewWidth := totalWidth - listWidth
+
+	m.sessionList.SetSize(listWidth-4, panelHeight-2) // -4 for border/padding
+	m.listPanel.SetSize(listWidth, panelHeight)
+	m.preview.SetSize(previewWidth, panelHeight)
+	m.searchBox.SetWidth(totalWidth)
+	m.hintBar.SetWidth(totalWidth)
+	m.renameInput.SetWidth(min(totalWidth-4, 56))
 }
 
 // Update handles messages.
@@ -140,6 +160,16 @@ func (m *Modal) Update(msg tea.Msg) (*Modal, tea.Cmd) {
 func (m *Modal) handleEscape() (*Modal, tea.Cmd) {
 	switch m.step {
 	case StepList:
+		// If search is active, clear it first
+		if m.searchBox.IsVisible() {
+			m.searchBox.Hide()
+			m.sessionList.ClearSearch()
+			m.totalSessions = m.sessionList.Count()
+			m.hintBar.SetMode(HintModeNormal)
+			// Recalculate sizes without search box
+			m.SetSize(m.width, m.height)
+			return m, nil
+		}
 		// Close modal.
 		m.Hide()
 		return m, util.CmdHandler(ModalClosedMsg{})
@@ -147,19 +177,49 @@ func (m *Modal) handleEscape() (*Modal, tea.Cmd) {
 		// Go back to list.
 		m.step = StepList
 		m.renameInput.Reset()
+		m.hintBar.SetMode(HintModeNormal)
 		return m, nil
 	}
 	return m, nil
 }
 
 func (m *Modal) updateList(msg tea.Msg) (*Modal, tea.Cmd) {
+	// Handle search box input when visible
+	if m.searchBox.IsVisible() {
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			switch keyMsg.String() {
+			case keyEnter:
+				// Exit search mode but keep filtered results
+				m.searchBox.Hide()
+				m.sessionList.ExitSearchMode()
+				m.hintBar.SetMode(HintModeNormal)
+				m.SetSize(m.width, m.height)
+				return m, nil
+			case "up", "down", "j", "k":
+				// Allow navigation while in search
+				// Pass to list
+			default:
+				// Update search box
+				var cmd tea.Cmd
+				m.searchBox, cmd = m.searchBox.Update(msg)
+
+				// Filter sessions based on search
+				searchText := m.searchBox.Value()
+				m.sessionList.Search(searchText)
+				m.searchBox.SetCounts(m.sessionList.Count(), m.totalSessions)
+				m.preview.SetSession(m.sessionList.Selected())
+				return m, cmd
+			}
+		}
+	}
+
 	switch msg := msg.(type) {
 	case SessionSelectedMsg:
 		// Switch to selected session.
 		m.Hide()
 		return m, tea.Batch(
 			util.CmdHandler(ModalClosedMsg{}),
-			util.CmdHandler(SwitchSessionMsg{SessionID: msg.SessionID}),
+			util.CmdHandler(SwitchSessionMsg(msg)),
 		)
 
 	case RenameSessionMsg:
@@ -167,16 +227,18 @@ func (m *Modal) updateList(msg tea.Msg) (*Modal, tea.Cmd) {
 		m.renameInput.SetValue(msg.CurrentTitle)
 		m.renameInput.Focus()
 		m.step = StepRename
+		m.hintBar.SetMode(HintModeRename)
 		return m, nil
 
 	case DeleteSessionMsg:
 		m.deleteTargetID = msg.SessionID
 		m.step = StepDeleteConfirm
+		m.hintBar.SetMode(HintModeDelete)
 		return m, nil
 
 	case ExportSessionMsg:
-		// TODO: Implement export flow
 		m.step = StepExport
+		m.hintBar.SetMode(HintModeExport)
 		return m, nil
 
 	case NewSessionMsg:
@@ -194,7 +256,15 @@ func (m *Modal) updateList(msg tea.Msg) (*Modal, tea.Cmd) {
 
 	case GenerateTitleMsg:
 		// Request LLM to generate title.
-		return m, util.CmdHandler(RequestTitleGenerationMsg{SessionID: msg.SessionID})
+		return m, util.CmdHandler(RequestTitleGenerationMsg(msg))
+	}
+
+	// Handle '/' to enter search mode
+	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "/" && !m.searchBox.IsVisible() {
+		m.searchBox.SetCounts(m.sessionList.Count(), m.totalSessions)
+		m.hintBar.SetMode(HintModeSearch)
+		m.SetSize(m.width, m.height) // Recalculate with search box
+		return m, m.searchBox.Show()
 	}
 
 	// Update list component.
@@ -208,22 +278,21 @@ func (m *Modal) updateList(msg tea.Msg) (*Modal, tea.Cmd) {
 }
 
 func (m *Modal) updateRename(msg tea.Msg) (*Modal, tea.Cmd) {
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
-		switch keyMsg.String() {
-		case "enter":
-			// Submit rename.
-			newTitle := m.renameInput.Value()
-			if newTitle != "" {
-				ctx := context.Background()
-				if err := m.sessionSvc.UpdateTitle(ctx, m.renameTargetID, newTitle); err != nil {
-					return m, util.ReportError(err)
-				}
-				m.sessionList.Refresh()
+	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == keyEnter {
+		// Submit rename.
+		newTitle := m.renameInput.Value()
+		if newTitle != "" {
+			ctx := context.Background()
+			if err := m.sessionSvc.UpdateTitle(ctx, m.renameTargetID, newTitle); err != nil {
+				return m, util.ReportError(err)
 			}
-			m.step = StepList
-			m.renameInput.Reset()
-			return m, util.ReportSuccess("Session renamed")
+			m.sessionList.Refresh()
+			m.totalSessions = m.sessionList.Count()
 		}
+		m.step = StepList
+		m.renameInput.Reset()
+		m.hintBar.SetMode(HintModeNormal)
+		return m, util.ReportSuccess("Session renamed")
 	}
 
 	// Update rename input.
@@ -243,10 +312,13 @@ func (m *Modal) updateDeleteConfirm(msg tea.Msg) (*Modal, tea.Cmd) {
 			}
 			m.step = StepList
 			m.sessionList.Refresh()
+			m.totalSessions = m.sessionList.Count()
+			m.hintBar.SetMode(HintModeNormal)
 			return m, util.ReportSuccess("Session deleted")
 		case "n", "N":
 			// Cancel.
 			m.step = StepList
+			m.hintBar.SetMode(HintModeNormal)
 			return m, nil
 		}
 	}
@@ -254,7 +326,6 @@ func (m *Modal) updateDeleteConfirm(msg tea.Msg) (*Modal, tea.Cmd) {
 }
 
 func (m *Modal) updateExport(msg tea.Msg) (*Modal, tea.Cmd) {
-	// TODO: Implement export flow
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		if keyMsg.String() == "enter" || keyMsg.String() == "m" {
 			// Export to markdown
@@ -277,35 +348,85 @@ func (m *Modal) View() string {
 		return ""
 	}
 
+	// For rename/delete/export, use dialog style
+	if m.step != StepList {
+		return m.renderDialog()
+	}
+
+	// Telescope-style layout for list view
+	return m.renderTelescopeView()
+}
+
+// renderTelescopeView renders the Telescope-style layout.
+func (m *Modal) renderTelescopeView() string {
+	// Calculate total width
+	totalWidth := min(m.width-4, 110)
+
+	// Calculate panel heights
+	panelHeight := m.height - 4
+	if m.searchBox.IsVisible() {
+		panelHeight -= 4
+	}
+
+	// Split width: 50% each
+	listWidth := totalWidth / 2
+	previewWidth := totalWidth - listWidth
+
+	// Update sizes
+	m.listPanel.SetSize(listWidth, panelHeight)
+	m.preview.SetSize(previewWidth, panelHeight)
+
+	// Render list panel with "Sessions" title
+	m.listPanel.SetTitle("Sessions")
+	m.listPanel.SetContent(m.sessionList.ViewList())
+	listView := m.listPanel.View()
+
+	// Preview already uses BorderedPanel internally
+	previewView := m.preview.View()
+
+	// Join panels horizontally
+	panels := lipgloss.JoinHorizontal(lipgloss.Top, listView, previewView)
+
+	// Build vertical layout
+	var parts []string
+	parts = append(parts, panels)
+
+	// Add search box if visible
+	if m.searchBox.IsVisible() {
+		parts = append(parts, m.searchBox.View())
+	}
+
+	// Add hint bar
+	parts = append(parts, m.hintBar.View())
+
+	content := strings.Join(parts, "\n")
+
+	// Center on screen
+	return lipgloss.Place(
+		m.width, m.height,
+		lipgloss.Center, lipgloss.Center,
+		content,
+	)
+}
+
+// renderDialog renders dialogs for rename/delete/export.
+func (m *Modal) renderDialog() string {
 	t := styles.CurrentTheme()
 
-	// Render current step content.
 	var content string
 	var title string
-	var footer string
-	var boxWidth int
+	boxWidth := min(m.width-4, 60)
 
 	switch m.step {
-	case StepList:
-		title = "Sessions"
-		content = m.renderSplitView()
-		footer = m.renderListFooter()
-		boxWidth = min(m.width-4, 110) // Wider for split view
 	case StepRename:
 		title = "Rename Session"
 		content = m.renameInput.View()
-		footer = "[enter] Save  [esc] Cancel"
-		boxWidth = min(m.width-4, 60) // Narrower for simple dialogs
 	case StepDeleteConfirm:
 		title = "Delete Session"
 		content = m.renderDeleteConfirm()
-		footer = "[y] Yes  [n] No  [esc] Cancel"
-		boxWidth = min(m.width-4, 60)
 	case StepExport:
 		title = "Export Session"
 		content = m.renderExportOptions()
-		footer = "[m] Markdown  [esc] Cancel"
-		boxWidth = min(m.width-4, 60)
 	}
 
 	contentWidth := boxWidth - 6
@@ -319,15 +440,10 @@ func (m *Modal) View() string {
 		Width(contentWidth).
 		Align(lipgloss.Left)
 
-	footerStyle := t.S().Muted.
-		Width(contentWidth).
-		Align(lipgloss.Center).
-		MarginTop(1)
-
 	innerContent := lipgloss.JoinVertical(lipgloss.Left,
 		titleStyle.Render(title),
 		contentStyle.Render(content),
-		footerStyle.Render(footer),
+		m.hintBar.View(),
 	)
 
 	boxStyle := lipgloss.NewStyle().
@@ -338,77 +454,11 @@ func (m *Modal) View() string {
 
 	box := boxStyle.Render(innerContent)
 
-	// Center on screen.
 	return lipgloss.Place(
 		m.width, m.height,
 		lipgloss.Center, lipgloss.Center,
 		box,
 	)
-}
-
-// renderSplitView renders the session list and preview side by side.
-func (m *Modal) renderSplitView() string {
-	t := styles.CurrentTheme()
-
-	// Calculate widths
-	totalWidth := min(m.width-10, 104) // inner width
-	listWidth := (totalWidth * 55) / 100
-	previewWidth := totalWidth - listWidth - 3 // -3 for divider spacing
-
-	var parts []string
-
-	// Search box at top spanning full width
-	if m.sessionList.IsSearchMode() || m.sessionList.HasSearchText() {
-		searchBoxStyle := lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(t.BorderFocus).
-			Padding(0, 1).
-			Width(totalWidth)
-
-		parts = append(parts, searchBoxStyle.Render(m.sessionList.SearchInputView()))
-		parts = append(parts, "") // Empty line after search
-	}
-
-	// Update preview with current selection
-	m.preview.SetSession(m.sessionList.Selected())
-
-	// Get list view (without search box)
-	listView := m.sessionList.ViewList()
-	previewView := m.preview.View()
-
-	// Count lines to make divider full height
-	listLines := strings.Count(listView, "\n") + 1
-	previewLines := strings.Count(previewView, "\n") + 1
-	maxLines := max(listLines, previewLines)
-
-	// Create full-height vertical divider
-	dividerStyle := t.S().Muted
-	var dividerLines []string
-	for i := 0; i < maxLines; i++ {
-		dividerLines = append(dividerLines, "│")
-	}
-	divider := dividerStyle.Render(strings.Join(dividerLines, "\n"))
-
-	// Ensure consistent widths
-	listStyle := lipgloss.NewStyle().Width(listWidth)
-	previewStyle := lipgloss.NewStyle().Width(previewWidth)
-
-	// Join list and preview horizontally with divider
-	splitView := lipgloss.JoinHorizontal(lipgloss.Top,
-		listStyle.Render(listView),
-		" "+divider+" ",
-		previewStyle.Render(previewView),
-	)
-
-	parts = append(parts, splitView)
-	return strings.Join(parts, "\n")
-}
-
-func (m *Modal) renderListFooter() string {
-	if m.sessionList.IsSearchMode() {
-		return "[enter] Done  [esc] Clear  [↑↓] Navigate"
-	}
-	return "[/] Search  [enter] Open  [n] New  [r] Rename  [d] Delete  [e] Export  [esc] Close"
 }
 
 func (m *Modal) renderDeleteConfirm() string {
@@ -447,8 +497,8 @@ func (m *Modal) Cursor() *tea.Cursor {
 	if m.step == StepRename {
 		return m.renameInput.Cursor()
 	}
-	if m.step == StepList && m.sessionList.IsSearchMode() {
-		return m.sessionList.Cursor()
+	if m.step == StepList && m.searchBox.IsVisible() {
+		return m.searchBox.Cursor()
 	}
 	return nil
 }
