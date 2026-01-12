@@ -152,9 +152,9 @@ func isAuthError(err error) bool {
 // Init initializes the chat page.
 func (m *Model) Init() tea.Cmd {
 	// Get or create a session
-	session := m.agent.Sessions().Current()
-	m.sessionID = session.ID
-	m.messages.SetMessages(session.Messages)
+	sess := m.agent.Sessions().Current()
+	m.sessionID = sess.ID
+	m.messages.SetMessages(sess.Messages)
 
 	return m.input.Init()
 }
@@ -796,13 +796,13 @@ func (m *Model) switchSession(sessionID string) (util.Model, tea.Cmd) {
 	}
 
 	// Set the new session as current
-	sessions := m.agent.Sessions()
-	if !sessions.SetCurrent(sessionID) {
+	sessionStore := m.agent.Sessions()
+	if !sessionStore.SetCurrent(sessionID) {
 		return m, util.ReportError(fmt.Errorf("session not found: %s", sessionID))
 	}
 
 	// Get the session and load its messages
-	sess, ok := sessions.Get(sessionID)
+	sess, ok := sessionStore.Get(sessionID)
 	if !ok {
 		return m, util.ReportError(fmt.Errorf("failed to load session: %s", sessionID))
 	}
@@ -824,7 +824,7 @@ func (m *Model) switchSession(sessionID string) (util.Model, tea.Cmd) {
 }
 
 // generateSessionTitle requests the LLM to generate a title for the session.
-func (m *Model) generateSessionTitle(sessionID string) (util.Model, tea.Cmd) {
+func (m *Model) generateSessionTitle(_ string) (util.Model, tea.Cmd) {
 	// TODO: Implement LLM-based title generation
 	// This would involve:
 	// 1. Getting the first few messages from the session
@@ -839,8 +839,8 @@ func (m *Model) exportSessionToMarkdown(sessionID string) (util.Model, tea.Cmd) 
 		return m, util.ReportError(fmt.Errorf("agent not initialized"))
 	}
 
-	sessions := m.agent.Sessions()
-	sess, ok := sessions.Get(sessionID)
+	sessionStore := m.agent.Sessions()
+	sess, ok := sessionStore.Get(sessionID)
 	if !ok {
 		return m, util.ReportError(fmt.Errorf("session not found: %s", sessionID))
 	}
@@ -855,7 +855,8 @@ func (m *Model) exportSessionToMarkdown(sessionID string) (util.Model, tea.Cmd) 
 	sb.WriteString(fmt.Sprintf("# %s\n\n", title))
 	sb.WriteString(fmt.Sprintf("*Exported: %s*\n\n---\n\n", sess.UpdatedAt.Format("2006-01-02 15:04")))
 
-	for _, msg := range sess.Messages {
+	for i := range sess.Messages {
+		msg := &sess.Messages[i]
 		switch msg.Role {
 		case agent.RoleUser:
 			sb.WriteString("## You\n\n")
@@ -870,6 +871,8 @@ func (m *Model) exportSessionToMarkdown(sessionID string) (util.Model, tea.Cmd) 
 			for _, tr := range msg.ToolResults {
 				sb.WriteString(fmt.Sprintf("<details>\n<summary>Tool: %s</summary>\n\n```\n%s\n```\n</details>\n\n", tr.Name, tr.Content))
 			}
+		case agent.RoleSystem:
+			// Skip system messages in export
 		}
 	}
 

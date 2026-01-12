@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	_ "github.com/ncruces/go-sqlite3/driver"
+	_ "github.com/ncruces/go-sqlite3/driver" // SQLite driver import
 	_ "github.com/ncruces/go-sqlite3/embed"
 	"github.com/pressly/goose/v3"
 )
@@ -30,7 +30,7 @@ type DB struct {
 func Open(dbPath string) (*DB, error) {
 	// Ensure directory exists
 	dir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, fmt.Errorf("creating database directory: %w", err)
 	}
 
@@ -42,26 +42,27 @@ func Open(dbPath string) (*DB, error) {
 	}
 
 	// Test connection
-	if err := conn.Ping(); err != nil {
-		conn.Close()
+	ctx := context.Background()
+	if err := conn.PingContext(ctx); err != nil {
+		conn.Close() //nolint:errcheck // Best effort cleanup on failure
 		return nil, fmt.Errorf("pinging database: %w", err)
 	}
 
 	// Apply additional pragmas for performance
-	if err := applyPragmas(conn); err != nil {
-		conn.Close()
+	if err := applyPragmas(ctx, conn); err != nil {
+		conn.Close() //nolint:errcheck // Best effort cleanup on failure
 		return nil, err
 	}
 
 	// Run migrations
 	goose.SetBaseFS(migrations)
 	if err := goose.SetDialect("sqlite3"); err != nil {
-		conn.Close()
+		conn.Close() //nolint:errcheck // Best effort cleanup on failure
 		return nil, fmt.Errorf("setting goose dialect: %w", err)
 	}
 
 	if err := goose.Up(conn, "migrations"); err != nil {
-		conn.Close()
+		conn.Close() //nolint:errcheck // Best effort cleanup on failure
 		return nil, fmt.Errorf("running migrations: %w", err)
 	}
 
@@ -72,13 +73,13 @@ func Open(dbPath string) (*DB, error) {
 }
 
 // applyPragmas sets SQLite pragmas for optimal performance.
-func applyPragmas(conn *sql.DB) error {
+func applyPragmas(ctx context.Context, conn *sql.DB) error {
 	pragmas := []string{
 		"PRAGMA synchronous = NORMAL",
 		"PRAGMA cache_size = -8000", // 8MB cache
 	}
 	for _, pragma := range pragmas {
-		if _, err := conn.Exec(pragma); err != nil {
+		if _, err := conn.ExecContext(ctx, pragma); err != nil {
 			return fmt.Errorf("applying %s: %w", pragma, err)
 		}
 	}
@@ -112,7 +113,7 @@ func (d *DB) WithTx(ctx context.Context, fn func(*sql.Tx) error) error {
 
 	if err := fn(tx); err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil {
-			return fmt.Errorf("rollback failed: %w (original error: %v)", rbErr, err)
+			return fmt.Errorf("rollback failed: %w (original error: %w)", rbErr, err)
 		}
 		return err
 	}

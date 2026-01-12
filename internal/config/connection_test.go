@@ -260,6 +260,11 @@ func TestMigrateToConnections(t *testing.T) {
 		t.Fatalf("Failed to create config dir: %v", err)
 	}
 
+	// Override GlobalConfigPath for testing to avoid writing to real config.
+	configPath := filepath.Join(configDir, "cdd.json")
+	SetGlobalConfigPath(configPath)
+	defer SetGlobalConfigPath("") // Reset after test
+
 	// Create config with old-style providers.
 	cfg := NewConfig()
 	cfg.Options = &Options{DataDir: tmpDir}
@@ -282,8 +287,7 @@ func TestMigrateToConnections(t *testing.T) {
 		Provider: "openai",
 	}
 
-	// Run migration (will fail to save due to GlobalConfigPath, but that's OK for testing).
-	// We just want to verify the in-memory migration logic.
+	// Run migration - saves to the temp config path.
 	_ = MigrateToConnections(cfg)
 
 	// Verify connections were created.
@@ -329,6 +333,12 @@ func TestMigrateToConnections(t *testing.T) {
 }
 
 func TestMigrateToConnections_SkipsUnconfiguredProviders(t *testing.T) {
+	// Override GlobalConfigPath for testing to avoid writing to real config.
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "cdd.json")
+	SetGlobalConfigPath(configPath)
+	defer SetGlobalConfigPath("") // Reset after test
+
 	cfg := NewConfig()
 
 	// Add provider without API key.
@@ -347,6 +357,12 @@ func TestMigrateToConnections_SkipsUnconfiguredProviders(t *testing.T) {
 }
 
 func TestMigrateToConnections_WithOAuth(t *testing.T) {
+	// Override GlobalConfigPath for testing to avoid writing to real config.
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "cdd.json")
+	SetGlobalConfigPath(configPath)
+	defer SetGlobalConfigPath("") // Reset after test
+
 	cfg := NewConfig()
 
 	// Add provider with OAuth.

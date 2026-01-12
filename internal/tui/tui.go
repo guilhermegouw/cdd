@@ -362,7 +362,7 @@ func (m *Model) updateComponentSizes() {
 func Run(cfg *config.Config, providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent, agentFactory AgentFactory, modelFactory ModelFactory, hub *pubsub.Hub, modelName string, sessionSvc *session.Service) error {
 	// Check if running in a terminal.
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		return fmt.Errorf("cdd requires an interactive terminal to run. Please run it in a terminal with stdin/stdout connected to a TTY.")
+		return fmt.Errorf("cdd requires an interactive terminal: stdin/stdout must be connected to a TTY")
 	}
 
 	// Initialize theme.

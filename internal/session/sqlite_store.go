@@ -160,7 +160,7 @@ func (s *SQLiteStore) ListWithPreview(ctx context.Context) ([]*SessionWithPrevie
 }
 
 // Search searches sessions by title keyword.
-// Supports multi-word search: "bug auth" matches "Authentication Bug Fix"
+// Supports multi-word search: "bug auth" matches "Authentication Bug Fix".
 func (s *SQLiteStore) Search(ctx context.Context, keyword string) ([]*Session, error) {
 	// Preprocess keyword for multi-word search
 	searchTerm := prepareSearchTerm(keyword)
@@ -178,7 +178,7 @@ func (s *SQLiteStore) Search(ctx context.Context, keyword string) ([]*Session, e
 }
 
 // SearchWithPreview searches sessions by title with first message preview.
-// Supports multi-word search: "bug auth" matches "Authentication Bug Fix"
+// Supports multi-word search: "bug auth" matches "Authentication Bug Fix".
 func (s *SQLiteStore) SearchWithPreview(ctx context.Context, keyword string) ([]*SessionWithPreview, error) {
 	// Preprocess keyword for multi-word search
 	searchTerm := prepareSearchTerm(keyword)
@@ -225,17 +225,28 @@ func sessionFromDB(dbs sqlc.Session) *Session {
 	}
 }
 
-// sessionWithPreviewFromDB converts a database session with preview to domain type.
-func sessionWithPreviewFromDB(dbs sqlc.ListSessionsWithPreviewRow) *SessionWithPreview {
+// sessionPreviewData holds common fields for session with preview conversion.
+type sessionPreviewData struct {
+	ID               string
+	Title            string
+	MessageCount     int64
+	SummaryMessageID sql.NullString
+	CreatedAt        int64
+	UpdatedAt        int64
+	FirstMessage     any
+}
+
+// buildSessionWithPreview creates a SessionWithPreview from common data.
+func buildSessionWithPreview(data sessionPreviewData) *SessionWithPreview {
 	var summaryID string
-	if dbs.SummaryMessageID.Valid {
-		summaryID = dbs.SummaryMessageID.String
+	if data.SummaryMessageID.Valid {
+		summaryID = data.SummaryMessageID.String
 	}
 
 	// Handle interface{} type from SQLC - convert to string
 	firstMsgStr := ""
-	if dbs.FirstMessage != nil {
-		if s, ok := dbs.FirstMessage.(string); ok {
+	if data.FirstMessage != nil {
+		if s, ok := data.FirstMessage.(string); ok {
 			firstMsgStr = s
 		}
 	}
@@ -243,44 +254,41 @@ func sessionWithPreviewFromDB(dbs sqlc.ListSessionsWithPreviewRow) *SessionWithP
 
 	return &SessionWithPreview{
 		Session: Session{
-			ID:               dbs.ID,
-			Title:            dbs.Title,
-			MessageCount:     int(dbs.MessageCount),
+			ID:               data.ID,
+			Title:            data.Title,
+			MessageCount:     int(data.MessageCount),
 			SummaryMessageID: summaryID,
-			CreatedAt:        time.UnixMilli(dbs.CreatedAt),
-			UpdatedAt:        time.UnixMilli(dbs.UpdatedAt),
+			CreatedAt:        time.UnixMilli(data.CreatedAt),
+			UpdatedAt:        time.UnixMilli(data.UpdatedAt),
 		},
 		FirstMessage: firstMsg,
 	}
 }
 
+// sessionWithPreviewFromDB converts a database session with preview to domain type.
+func sessionWithPreviewFromDB(dbs sqlc.ListSessionsWithPreviewRow) *SessionWithPreview {
+	return buildSessionWithPreview(sessionPreviewData{
+		ID:               dbs.ID,
+		Title:            dbs.Title,
+		MessageCount:     dbs.MessageCount,
+		SummaryMessageID: dbs.SummaryMessageID,
+		CreatedAt:        dbs.CreatedAt,
+		UpdatedAt:        dbs.UpdatedAt,
+		FirstMessage:     dbs.FirstMessage,
+	})
+}
+
 // searchSessionWithPreviewFromDB converts a search result with preview to domain type.
 func searchSessionWithPreviewFromDB(dbs sqlc.SearchSessionsWithPreviewRow) *SessionWithPreview {
-	var summaryID string
-	if dbs.SummaryMessageID.Valid {
-		summaryID = dbs.SummaryMessageID.String
-	}
-
-	// Handle interface{} type from SQLC - convert to string
-	firstMsgStr := ""
-	if dbs.FirstMessage != nil {
-		if s, ok := dbs.FirstMessage.(string); ok {
-			firstMsgStr = s
-		}
-	}
-	firstMsg := extractTextFromParts(firstMsgStr)
-
-	return &SessionWithPreview{
-		Session: Session{
-			ID:               dbs.ID,
-			Title:            dbs.Title,
-			MessageCount:     int(dbs.MessageCount),
-			SummaryMessageID: summaryID,
-			CreatedAt:        time.UnixMilli(dbs.CreatedAt),
-			UpdatedAt:        time.UnixMilli(dbs.UpdatedAt),
-		},
-		FirstMessage: firstMsg,
-	}
+	return buildSessionWithPreview(sessionPreviewData{
+		ID:               dbs.ID,
+		Title:            dbs.Title,
+		MessageCount:     dbs.MessageCount,
+		SummaryMessageID: dbs.SummaryMessageID,
+		CreatedAt:        dbs.CreatedAt,
+		UpdatedAt:        dbs.UpdatedAt,
+		FirstMessage:     dbs.FirstMessage,
+	})
 }
 
 // extractTextFromParts extracts text content from JSON parts array.

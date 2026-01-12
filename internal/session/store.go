@@ -17,6 +17,8 @@ type Session struct {
 }
 
 // SessionWithPreview includes the first user message preview.
+//
+//nolint:revive // Name is clear and used across packages
 type SessionWithPreview struct {
 	Session
 	FirstMessage string // Preview of the first user message

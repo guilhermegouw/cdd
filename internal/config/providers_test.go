@@ -10,7 +10,10 @@ import (
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
 )
 
-const testOpenAIProviderID = "openai"
+const (
+	testOpenAIProviderID    = "openai"
+	testAnthropicProviderID = "anthropic"
+)
 
 func TestProvidersCache_Struct(t *testing.T) {
 	now := time.Now()
@@ -41,7 +44,7 @@ func TestLoadProvidersCache(t *testing.T) {
 		UpdatedAt: time.Now(),
 		Providers: []catwalk.Provider{
 			{ID: testOpenAIProviderID, Name: "OpenAI"},
-			{ID: "anthropic", Name: "Anthropic"},
+			{ID: testAnthropicProviderID, Name: "Anthropic"},
 		},
 	}
 	data, err := json.Marshal(cache)
@@ -335,7 +338,7 @@ func TestLoadProviders_StaleCache(t *testing.T) {
 	// Embedded providers should have standard providers like openai, anthropic.
 	hasStandardProvider := false
 	for _, p := range providers {
-		if p.ID == testOpenAIProviderID || p.ID == "anthropic" {
+		if p.ID == testOpenAIProviderID || p.ID == testAnthropicProviderID {
 			hasStandardProvider = true
 			break
 		}

@@ -80,8 +80,9 @@ func (b *Builder) BuildModels(ctx context.Context) (large, small Model, err erro
 	return large, small, nil
 }
 
-// refreshExpiredTokens checks all providers for expired OAuth tokens and refreshes them.
+// refreshExpiredTokens checks all providers and connections for expired OAuth tokens and refreshes them.
 func (b *Builder) refreshExpiredTokens(ctx context.Context) error {
+	// Check provider tokens.
 	for providerID, providerCfg := range b.cfg.Providers {
 		if providerCfg.OAuthToken == nil {
 			continue
@@ -109,6 +110,37 @@ func (b *Builder) refreshExpiredTokens(ctx context.Context) error {
 
 		// Clear cached provider so it's rebuilt with new token.
 		delete(b.cache, providerID)
+	}
+
+	// Check connection tokens.
+	for i := range b.cfg.Connections {
+		conn := &b.cfg.Connections[i]
+		if conn.OAuthToken == nil {
+			continue
+		}
+
+		if !conn.OAuthToken.IsExpired() {
+			expiresAt := time.Unix(conn.OAuthToken.ExpiresAt, 0)
+			expiresIn := time.Until(expiresAt)
+			debug.Token("valid", fmt.Sprintf("connection=%s expires_in=%s", conn.Name, expiresIn.Round(time.Second)))
+			continue
+		}
+
+		expiresAt := time.Unix(conn.OAuthToken.ExpiresAt, 0)
+		debug.Token("expired", fmt.Sprintf("connection=%s expiry=%s", conn.Name, expiresAt.Format(time.RFC3339)))
+
+		// Token is expired, try to refresh it.
+		// RefreshConnectionOAuthToken persists to disk immediately (critical for token rotation).
+		if err := b.cfg.RefreshConnectionOAuthToken(ctx, i); err != nil {
+			debug.Token("refresh_failed", fmt.Sprintf("connection=%s error=%v", conn.Name, err))
+			return fmt.Errorf("refreshing token for connection %q: %w (re-authenticate with: rm ~/.config/cdd/cdd.json && cdd)", conn.Name, err)
+		}
+
+		newExpiresAt := time.Unix(conn.OAuthToken.ExpiresAt, 0)
+		debug.Token("refreshed", fmt.Sprintf("connection=%s new_expiry=%s", conn.Name, newExpiresAt.Format(time.RFC3339)))
+
+		// Clear cached provider so it's rebuilt with new token.
+		delete(b.cache, conn.ProviderID)
 	}
 
 	return nil

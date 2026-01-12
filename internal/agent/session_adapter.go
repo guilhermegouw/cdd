@@ -193,8 +193,8 @@ func (s *PersistentSessionStore) AddMessage(sessionID string, msg Message) bool 
 		return false
 	}
 
-	// Increment message count in session
-	_ = s.sessionSvc.IncrementMessageCount(ctx, sessionID)
+	// Increment message count in session (non-critical operation)
+	_ = s.sessionSvc.IncrementMessageCount(ctx, sessionID) //nolint:errcheck // Non-critical count update
 
 	// Update cache
 	s.mu.Lock()
@@ -324,7 +324,15 @@ func convertFromMessagePkg(dbMsgs []*message.Message) []Message {
 
 // convertToMessageParts converts an agent.Message to message.Part slice.
 func convertToMessageParts(msg Message) []message.Part {
-	var parts []message.Part
+	// Pre-allocate with estimated capacity
+	capacity := len(msg.ToolCalls) + len(msg.ToolResults)
+	if msg.Content != "" {
+		capacity++
+	}
+	if msg.Reasoning != "" {
+		capacity++
+	}
+	parts := make([]message.Part, 0, capacity)
 
 	if msg.Content != "" {
 		parts = append(parts, message.NewTextPart(msg.Content))

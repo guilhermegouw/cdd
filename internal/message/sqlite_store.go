@@ -225,8 +225,8 @@ func messageFromDB(dbMsg sqlc.Message) (*Message, error) {
 // messagesFromDB converts database messages to domain messages.
 func messagesFromDB(dbMsgs []sqlc.Message) ([]*Message, error) {
 	msgs := make([]*Message, len(dbMsgs))
-	for i, dbm := range dbMsgs {
-		msg, err := messageFromDB(dbm)
+	for i := range dbMsgs {
+		msg, err := messageFromDB(dbMsgs[i])
 		if err != nil {
 			return nil, err
 		}

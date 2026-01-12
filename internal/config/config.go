@@ -155,6 +155,39 @@ func (c *Config) RefreshOAuthToken(ctx context.Context, providerID string) error
 	return nil
 }
 
+// RefreshConnectionOAuthToken refreshes the OAuth token for the given connection.
+// It updates the connection with the new token and persists to disk.
+func (c *Config) RefreshConnectionOAuthToken(ctx context.Context, connectionIndex int) error {
+	if connectionIndex < 0 || connectionIndex >= len(c.Connections) {
+		return fmt.Errorf("connection index %d out of range", connectionIndex)
+	}
+	conn := &c.Connections[connectionIndex]
+	if conn.OAuthToken == nil {
+		return fmt.Errorf("connection %q has no OAuth token", conn.Name)
+	}
+
+	newToken, err := claude.RefreshToken(ctx, conn.OAuthToken.RefreshToken)
+	if err != nil {
+		return fmt.Errorf("refreshing token for connection %q: %w", conn.Name, err)
+	}
+
+	// Persist tokens to disk IMMEDIATELY before updating in-memory state.
+	// This is critical because Anthropic uses token rotation - the old refresh token
+	// is invalidated as soon as we receive the new one.
+	if err := c.SetConfigField(fmt.Sprintf("connections.%d.oauth", connectionIndex), newToken); err != nil {
+		return fmt.Errorf("persisting refreshed oauth token: %w", err)
+	}
+	// Also update api_key field for Bearer token format.
+	if err := c.SetConfigField(fmt.Sprintf("connections.%d.api_key", connectionIndex), "Bearer "+newToken.AccessToken); err != nil {
+		return fmt.Errorf("persisting refreshed api_key: %w", err)
+	}
+
+	// Now safe to update in-memory state.
+	conn.OAuthToken = newToken
+	conn.APIKey = "Bearer " + newToken.AccessToken
+	return nil
+}
+
 // SetConfigField updates a single field in the config file using JSON path notation.
 // This uses sjson for surgical updates - only the specified field is modified.
 func (c *Config) SetConfigField(key string, value any) error {
