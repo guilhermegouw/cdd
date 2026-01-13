@@ -86,10 +86,10 @@ func TestMessage_ToolCalls(t *testing.T) {
 			t.Fatalf("ToolCalls() returned %d calls, want 2", len(calls))
 		}
 
-		if calls[0].ID != "call-1" {
+		if calls[0].ID != "call-1" { //nolint:goconst // Test literals are intentionally readable
 			t.Errorf("calls[0].ID = %q, want %q", calls[0].ID, "call-1")
 		}
-		if calls[0].Name != "read_file" {
+		if calls[0].Name != "read_file" { //nolint:goconst // Test literals are intentionally readable
 			t.Errorf("calls[0].Name = %q, want %q", calls[0].Name, "read_file")
 		}
 		if calls[1].ID != "call-2" {

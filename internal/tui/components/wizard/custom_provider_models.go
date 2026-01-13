@@ -286,7 +286,8 @@ func (c *CustomProviderModels) View() string {
 func (c *CustomProviderModels) renderModelList() string {
 	t := styles.CurrentTheme()
 
-	lines := []string{t.S().Text.Render("Configured Models:")}
+	lines := make([]string, 0, 1+len(c.models))
+	lines = append(lines, t.S().Text.Render("Configured Models:"))
 
 	for i := range c.models {
 		modelInfo := fmt.Sprintf("  %d. %s (%s)", i+1, c.models[i].Name, c.models[i].ID)
@@ -369,10 +370,11 @@ func (c *CustomProviderModels) renderFinishStep() string {
 		BorderForeground(t.Success).
 		Padding(1)
 
-	lines := []string{
+	lines := make([]string, 0, 2+len(c.models)+3) //nolint:mnd // header, empty, models, empty, instructions, hint
+	lines = append(lines,
 		t.S().Success.Bold(true).Render(fmt.Sprintf("Configured %d model(s)", len(c.models))),
 		"",
-	}
+	)
 
 	for i, m := range c.models {
 		lines = append(lines, t.S().Text.Render(fmt.Sprintf("%d. %s", i+1, m.Name)))

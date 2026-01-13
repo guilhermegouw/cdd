@@ -480,7 +480,7 @@ func TestSQLiteStore_PartsRoundTrip(t *testing.T) {
 
 	// Verify tool result part
 	tr := retrieved.Parts[3].ToolResult
-	if tr == nil || tr.ToolCallID != "call-1" || tr.Content != "file contents here" {
+	if tr == nil || tr.ToolCallID != "call-1" || tr.Content != "file contents here" { //nolint:goconst // Test literals are intentionally readable
 		t.Errorf("tool result part mismatch: %+v", retrieved.Parts[3])
 	}
 }

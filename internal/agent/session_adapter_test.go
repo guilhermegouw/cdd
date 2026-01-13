@@ -200,7 +200,7 @@ func TestPersistentSessionStore_AddMessage(t *testing.T) {
 		if len(msgs) != 1 {
 			t.Fatalf("GetMessages() returned %d messages, want 1", len(msgs))
 		}
-		if msgs[0].Content != "Hello" {
+		if msgs[0].Content != "Hello" { //nolint:goconst // Test literals are intentionally readable
 			t.Errorf("Content = %q, want %q", msgs[0].Content, "Hello")
 		}
 	})

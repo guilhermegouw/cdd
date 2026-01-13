@@ -103,7 +103,7 @@ func (a *DefaultAgent) Send(ctx context.Context, prompt string, opts SendOptions
 
 	// Prepare history with system messages at the start
 	// OAuth requires "You are Claude Code..." as a separate first block
-	var messages []fantasy.Message
+	messages := make([]fantasy.Message, 0, 2) //nolint:mnd // 1 system message + history
 	messages = append(messages, fantasy.NewSystemMessage(
 		oauthSystemHeader, // First block - required for OAuth
 		a.systemPrompt,    // Second block - actual system prompt
