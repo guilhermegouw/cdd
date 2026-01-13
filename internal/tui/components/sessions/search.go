@@ -13,11 +13,11 @@ import (
 
 // SearchBox is a search input component with count display.
 type SearchBox struct {
-	input        textinput.Model
-	width        int
-	filteredCnt  int
-	totalCnt     int
-	visible      bool
+	input       textinput.Model
+	width       int
+	filteredCnt int
+	totalCnt    int
+	visible     bool
 }
 
 // NewSearchBox creates a new search box.
@@ -133,7 +133,7 @@ func (s *SearchBox) View() string {
 	// Pad content to width
 	contentLen := lipgloss.Width(content)
 	if contentLen < contentWidth {
-		content = content + strings.Repeat(" ", contentWidth-contentLen)
+		content += strings.Repeat(" ", contentWidth-contentLen)
 	}
 
 	contentLine := borderStyle.Render("│ ") + content + borderStyle.Render(" │")

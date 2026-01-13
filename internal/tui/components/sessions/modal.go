@@ -195,7 +195,7 @@ func (m *Modal) updateList(msg tea.Msg) (*Modal, tea.Cmd) {
 				m.hintBar.SetMode(HintModeNormal)
 				m.SetSize(m.width, m.height)
 				return m, nil
-			case "up", "down", "j", "k":
+			case "up", "down", "j", "k": //nolint:goconst // Navigation keys are intentionally readable
 				// Allow navigation while in search
 				// Pass to list
 			default:
@@ -418,6 +418,9 @@ func (m *Modal) renderDialog() string {
 	boxWidth := min(m.width-4, 60)
 
 	switch m.step {
+	case StepList:
+		// StepList is handled separately, this case prevents exhaustive lint error
+		return ""
 	case StepRename:
 		title = "Rename Session"
 		content = m.renameInput.View()

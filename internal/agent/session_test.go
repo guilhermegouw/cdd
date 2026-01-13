@@ -163,7 +163,7 @@ func TestSessionStoreMessages(t *testing.T) {
 		if len(messages) != 1 {
 			t.Errorf("Expected 1 message, got %d", len(messages))
 		}
-		if messages[0].Content != "Hello" {
+		if messages[0].Content != "Hello" { //nolint:goconst // Test literals are intentionally readable
 			t.Errorf("Expected content 'Hello', got %q", messages[0].Content)
 		}
 		if messages[0].ID == "" {

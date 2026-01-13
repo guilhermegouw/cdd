@@ -166,5 +166,5 @@ func wordWrap(text string, width int) string {
 	return result.String()
 }
 
-// unused import guard
+// unused import guard.
 var _ = lipgloss.Width

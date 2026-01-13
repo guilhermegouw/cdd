@@ -126,7 +126,7 @@ func (l *SessionList) Update(msg tea.Msg) (*SessionList, tea.Cmd) {
 				l.cursor--
 				l.ensureVisible()
 			}
-		case "down", "j":
+		case "down", "j": //nolint:goconst // Navigation keys are intentionally readable
 			if l.cursor < len(l.sessions)-1 {
 				l.cursor++
 				l.ensureVisible()

@@ -118,7 +118,7 @@ func (p *BorderedPanel) View() string {
 		// Measure visual width and pad to content width
 		lineLen := lipgloss.Width(line)
 		if lineLen < contentWidth {
-			line = line + strings.Repeat(" ", contentWidth-lineLen)
+			line += strings.Repeat(" ", contentWidth-lineLen)
 		} else if lineLen > contentWidth {
 			// Truncate if too long
 			line = truncateToWidth(line, contentWidth)
