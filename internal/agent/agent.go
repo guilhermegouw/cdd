@@ -88,6 +88,40 @@ type Agent interface {
 	IsBusy(sessionID string) bool
 }
 
+// Sessions is the interface for session management.
+// This allows different implementations (in-memory, database-backed) to be used.
+type Sessions interface {
+	// Create creates a new session with the given title.
+	Create(title string) *Session
+
+	// Get returns a session by ID.
+	Get(id string) (*Session, bool)
+
+	// Current returns the current session, creating one if none exists.
+	Current() *Session
+
+	// SetCurrent sets the current session.
+	SetCurrent(id string) bool
+
+	// List returns all sessions.
+	List() []*Session
+
+	// Delete removes a session.
+	Delete(id string) bool
+
+	// AddMessage adds a message to a session.
+	AddMessage(sessionID string, msg Message) bool
+
+	// GetMessages returns all messages for a session.
+	GetMessages(sessionID string) []Message
+
+	// ClearMessages clears all messages from a session.
+	ClearMessages(sessionID string) bool
+
+	// UpdateTitle updates a session's title.
+	UpdateTitle(sessionID, title string) bool
+}
+
 // Config contains agent configuration.
 type Config struct { //nolint:govet // fieldalignment: preserving logical field order
 	Model        fantasy.LanguageModel
@@ -95,6 +129,7 @@ type Config struct { //nolint:govet // fieldalignment: preserving logical field 
 	Tools        []fantasy.AgentTool
 	WorkingDir   string
 	Hub          *pubsub.Hub // Optional pub/sub hub for event publishing
+	Sessions     Sessions    // Optional custom sessions implementation
 }
 
 // ErrSessionBusy is returned when a session is already processing a request.

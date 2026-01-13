@@ -16,6 +16,12 @@ type (
 	// CloseModelsModalMsg requests closing the models/connections modal.
 	CloseModelsModalMsg struct{}
 
+	// OpenSessionsModalMsg requests opening the sessions modal.
+	OpenSessionsModalMsg struct{}
+
+	// CloseSessionsModalMsg requests closing the sessions modal.
+	CloseSessionsModalMsg struct{}
+
 	// UnknownCommandMsg indicates an unknown slash command was entered.
 	UnknownCommandMsg struct {
 		Command string
@@ -45,6 +51,12 @@ func NewCommandRegistry() *CommandRegistry {
 		Name:        "models",
 		Description: "Manage API connections and model selection",
 		Handler:     func(args []string) tea.Msg { return OpenModelsModalMsg{} },
+	})
+
+	r.Register(Command{
+		Name:        "sessions",
+		Description: "Manage conversation sessions",
+		Handler:     func(args []string) tea.Msg { return OpenSessionsModalMsg{} },
 	})
 
 	return r

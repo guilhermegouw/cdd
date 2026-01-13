@@ -594,6 +594,12 @@ func TestFindProjectConfig_NotFound(t *testing.T) {
 func TestLoadFromFile(t *testing.T) {
 	tempDir := t.TempDir()
 
+	// Override GlobalConfigPath for testing to avoid writing to real config
+	// when MigrateToConnections is called.
+	globalConfigPath := filepath.Join(tempDir, "cdd.json")
+	SetGlobalConfigPath(globalConfigPath)
+	defer SetGlobalConfigPath("") // Reset after test
+
 	// Set CATWALK_URL to invalid to use embedded fallback.
 	t.Setenv("CATWALK_URL", "http://invalid.invalid.invalid")
 	t.Setenv("TEST_API_KEY", "sk-test-key")

@@ -4,18 +4,21 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/fantasy"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
+	"golang.org/x/term"
 
 	"github.com/guilhermegouw/cdd/internal/agent"
 	"github.com/guilhermegouw/cdd/internal/bridge"
 	"github.com/guilhermegouw/cdd/internal/config"
 	"github.com/guilhermegouw/cdd/internal/debug"
 	"github.com/guilhermegouw/cdd/internal/pubsub"
+	"github.com/guilhermegouw/cdd/internal/session"
 	"github.com/guilhermegouw/cdd/internal/tui/components/welcome"
 	"github.com/guilhermegouw/cdd/internal/tui/components/wizard"
 	"github.com/guilhermegouw/cdd/internal/tui/page"
@@ -26,7 +29,8 @@ import (
 
 // AgentFactory is a function that creates an agent from the current config.
 // It's called after the wizard completes to create the agent without restarting.
-type AgentFactory func() (*agent.DefaultAgent, error)
+// Also returns the session service if database is available.
+type AgentFactory func() (*agent.DefaultAgent, *session.Service, error)
 
 // ModelFactory rebuilds the model with fresh tokens from config.
 // This allows swapping the model without creating a new agent, preserving session history.
@@ -44,6 +48,7 @@ type Model struct {
 	hub          *pubsub.Hub
 	bridge       *bridge.TUIBridge
 	cfg          *config.Config
+	sessionSvc   *session.Service
 	currentPage  page.ID
 	statusMsg    string
 	modelName    string
@@ -56,7 +61,7 @@ type Model struct {
 }
 
 // New creates a new TUI model.
-func New(cfg *config.Config, providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent, agentFactory AgentFactory, modelFactory ModelFactory, hub *pubsub.Hub, modelName string) *Model {
+func New(cfg *config.Config, providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent, agentFactory AgentFactory, modelFactory ModelFactory, hub *pubsub.Hub, modelName string, sessionSvc *session.Service) *Model {
 	m := &Model{
 		keyMap:       DefaultKeyMap(),
 		cfg:          cfg,
@@ -69,14 +74,18 @@ func New(cfg *config.Config, providers []catwalk.Provider, isFirstRun bool, ag *
 		modelFactory: modelFactory,
 		hub:          hub,
 		modelName:    modelName,
+		sessionSvc:   sessionSvc,
 	}
 
 	// If we have an agent and it's not first run, go directly to chat.
 	if ag != nil && !isFirstRun {
 		m.chatPage = chat.New(ag)
-		m.chatPage.SetAgentFactory(chat.AgentFactory(agentFactory))
+		m.chatPage.SetAgentFactory(m.wrapAgentFactory())
 		m.chatPage.SetModelFactory(chat.ModelFactory(modelFactory))
 		m.chatPage.SetConfig(cfg, providers)
+		if sessionSvc != nil {
+			m.chatPage.SetSessionService(sessionSvc)
+		}
 		if modelName != "" {
 			m.chatPage.SetModelName(modelName)
 		}
@@ -84,6 +93,22 @@ func New(cfg *config.Config, providers []catwalk.Provider, isFirstRun bool, ag *
 	}
 
 	return m
+}
+
+// wrapAgentFactory creates a chat-compatible agent factory that also updates session service.
+func (m *Model) wrapAgentFactory() chat.AgentFactory {
+	return func() (*agent.DefaultAgent, error) {
+		ag, sessionSvc, err := m.agentFactory()
+		if err != nil {
+			return nil, err
+		}
+		// Update model and chat page with new session service.
+		m.sessionSvc = sessionSvc
+		if m.chatPage != nil && sessionSvc != nil {
+			m.chatPage.SetSessionService(sessionSvc)
+		}
+		return ag, nil
+	}
 }
 
 // Init initializes the TUI.
@@ -125,13 +150,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		debug.Event("tui", "WizardComplete", "wizard finished")
 		// Wizard complete - create agent and transition to chat.
 		if m.agent == nil && m.agentFactory != nil {
-			ag, err := m.agentFactory()
+			ag, sessionSvc, err := m.agentFactory()
 			if err != nil {
 				debug.Error("tui", err, "creating agent after wizard")
 				m.statusMsg = fmt.Sprintf("Failed to create agent: %v", err)
 				return m, nil
 			}
 			m.agent = ag
+			m.sessionSvc = sessionSvc
 		}
 
 		// Reload config after wizard saved it.
@@ -151,9 +177,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.agent != nil {
 			m.chatPage = chat.New(m.agent)
-			m.chatPage.SetAgentFactory(chat.AgentFactory(m.agentFactory))
+			m.chatPage.SetAgentFactory(m.wrapAgentFactory())
 			m.chatPage.SetModelFactory(chat.ModelFactory(m.modelFactory))
 			m.chatPage.SetConfig(m.cfg, m.providers)
+			if m.sessionSvc != nil {
+				m.chatPage.SetSessionService(m.sessionSvc)
+			}
 			if modelName != "" {
 				m.chatPage.SetModelName(modelName)
 			}
@@ -330,11 +359,16 @@ func (m *Model) updateComponentSizes() {
 }
 
 // Run starts the TUI program.
-func Run(cfg *config.Config, providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent, agentFactory AgentFactory, modelFactory ModelFactory, hub *pubsub.Hub, modelName string) error {
+func Run(cfg *config.Config, providers []catwalk.Provider, isFirstRun bool, ag *agent.DefaultAgent, agentFactory AgentFactory, modelFactory ModelFactory, hub *pubsub.Hub, modelName string, sessionSvc *session.Service) error {
+	// Check if running in a terminal.
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return fmt.Errorf("cdd requires an interactive terminal: stdin/stdout must be connected to a TTY")
+	}
+
 	// Initialize theme.
 	styles.NewManager()
 
-	model := New(cfg, providers, isFirstRun, ag, agentFactory, modelFactory, hub, modelName)
+	model := New(cfg, providers, isFirstRun, ag, agentFactory, modelFactory, hub, modelName, sessionSvc)
 	// In Bubble Tea v2, AltScreen and MouseMode are set in View()
 	p := tea.NewProgram(model)
 
